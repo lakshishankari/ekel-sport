@@ -1,31 +1,80 @@
-import { useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { router } from "expo-router";
-import { loadAuth } from "../lib/authStore";
-import { logout } from "../lib/logout";
+import { clearAuth } from "../lib/authStore";
 
 export default function AdminHome() {
-  useEffect(() => {
-    (async () => {
-      const { token, role } = await loadAuth();
-      if (!token || role !== "ADMIN") router.replace("/login");
-    })();
-  }, []);
+  async function onLogout() {
+    await clearAuth();
+    router.replace("/login");
+  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Admin Dashboard</Text>
 
-      <TouchableOpacity style={styles.btn} onPress={logout}>
-        <Text style={styles.btnText}>Logout</Text>
+      {/* View all users */}
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push("/adminUsers")}
+      >
+        <Text style={styles.cardText}>View All Users</Text>
+      </TouchableOpacity>
+
+      {/* Create advisory (next step) */}
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push("/createAdvisory")}
+      >
+        <Text style={styles.cardText}>Create Advisory Account</Text>
+      </TouchableOpacity>
+
+      {/* Logout */}
+      <TouchableOpacity style={styles.logoutBtn} onPress={onLogout}>
+        <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B0F14", justifyContent: "center", alignItems: "center" },
-  title: { color: "white", fontSize: 28, fontWeight: "900", marginBottom: 18 },
-  btn: { backgroundColor: "#C9A227", paddingVertical: 14, paddingHorizontal: 28, borderRadius: 999 },
-  btnText: { color: "#111827", fontSize: 16, fontWeight: "900" },
+  container: {
+    flex: 1,
+    backgroundColor: "#0B0F14",
+    justifyContent: "center",
+    padding: 24,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "white",
+    marginBottom: 30,
+    textAlign: "center",
+  },
+  card: {
+    backgroundColor: "#121826",
+    borderRadius: 14,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#263041",
+  },
+  cardText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  logoutBtn: {
+    marginTop: 30,
+    backgroundColor: "#D4AF37",
+    padding: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  logoutText: {
+    fontWeight: "800",
+    fontSize: 16,
+    color: "#111827",
+  },
 });

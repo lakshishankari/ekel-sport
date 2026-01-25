@@ -1,22 +1,17 @@
-/**
- * Usage:
- *   requireRole("ADMIN")
- *   requireRole("STUDENT")
- *   requireRole("ADVISORY")
- */
-function requireRole(...allowedRoles) {
+function roleMiddleware(allowedRoles = []) {
   return (req, res, next) => {
-    // requireAuth must run before this (so req.user exists)
-    if (!req.user || !req.user.role) {
+    const role = req.user?.role;
+
+    if (!role) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Forbidden: insufficient permissions" });
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({ message: "Forbidden: insufficient role" });
     }
 
-    return next();
+    next();
   };
 }
 
-module.exports = { requireRole };
+module.exports = { roleMiddleware };

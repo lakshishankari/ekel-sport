@@ -13,18 +13,27 @@ function signToken(user) {
   );
 }
 
+// Helpers
+function isStudentEmail(email) {
+  // Student email format: shankar-im22048@stu.kln.ac.lk
+  const studentEmailRegex = /^[a-zA-Z0-9._-]+-im\d+@stu\.kln\.ac\.lk$/;
+  return studentEmailRegex.test(String(email || "").trim().toLowerCase());
+}
+
+function isStaffEmail(email) {
+  // Advisory/Admin email format: something@kln.ac.lk
+  return String(email || "").trim().toLowerCase().endsWith("@kln.ac.lk");
+}
+
 /**
- * ✅ STUDENT SELF-REGISTRATION (NO role from client)
+ * ✅ STUDENT SELF-REGISTRATION (role is forced to STUDENT)
  * POST /api/auth/register-student
- * - studentId required
- * - must use student email format like: shankar-im22048@stu.kln.ac.lk
  */
 authRouter.post("/register-student", async (req, res) => {
   try {
     const { studentId, fullName, email, password } = req.body;
     const role = "STUDENT";
 
-    // Basic validation
     if (!studentId || !fullName || !email || !password) {
       return res.status(400).json({
         message: "studentId, fullName, email, password are required",
@@ -37,9 +46,7 @@ authRouter.post("/register-student", async (req, res) => {
       });
     }
 
-    // Student email format: shankar-im22048@stu.kln.ac.lk
-    const studentEmailRegex = /^[a-zA-Z0-9._-]+-im\d+@stu\.kln\.ac\.lk$/;
-    if (!studentEmailRegex.test(email)) {
+    if (!isStudentEmail(email)) {
       return res.status(400).json({
         message: "Student email must be like shankar-im22048@stu.kln.ac.lk",
       });
@@ -84,15 +91,17 @@ authRouter.post("/register-student", async (req, res) => {
 });
 
 /**
- * ✅ REGISTER (ADMIN / ADVISORY)  (and can still be used for STUDENT if you pass role)
+ * ✅ REGISTER (System-created users)
  * POST /api/auth/register
- * - For system-created users (admin/advisory). We'll use this later in Admin dashboard.
+ *
+ * Rules:
+ * - STUDENT: must include studentId and student email format
+ * - ADMIN/ADVISORY: must use @kln.ac.lk email
  */
 authRouter.post("/register", async (req, res) => {
   try {
     const { role, studentId, fullName, email, password } = req.body;
 
-    // Basic validation (role is required here)
     if (!role || !fullName || !email || !password) {
       return res.status(400).json({
         message: "role, fullName, email, password are required",
@@ -112,20 +121,12 @@ authRouter.post("/register", async (req, res) => {
       });
     }
 
-    // Email already exists check (all roles)
-    const [existingEmail] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
-    if (existingEmail.length > 0) {
-      return res.status(409).json({ message: "Email already registered" });
-    }
-
-    // STUDENT-specific rules (if role is STUDENT using this endpoint)
+    // Role-based email rules
     if (role === "STUDENT") {
       if (!studentId) {
         return res.status(400).json({ message: "studentId is required for STUDENT" });
       }
-
-      const studentEmailRegex = /^[a-zA-Z0-9._-]+-im\d+@stu\.kln\.ac\.lk$/;
-      if (!studentEmailRegex.test(email)) {
+      if (!isStudentEmail(email)) {
         return res.status(400).json({
           message: "Student email must be like shankar-im22048@stu.kln.ac.lk",
         });
@@ -137,11 +138,23 @@ authRouter.post("/register", async (req, res) => {
       if (existingStudent.length > 0) {
         return res.status(409).json({ message: "Student ID already registered" });
       }
+    } else {
+      // ADMIN / ADVISORY
+      if (!isStaffEmail(email)) {
+        return res.status(400).json({
+          message: `${role} email must be an official @kln.ac.lk email`,
+        });
+      }
+    }
+
+    // Email already exists check (all roles)
+    const [existingEmail] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
+    if (existingEmail.length > 0) {
+      return res.status(409).json({ message: "Email already registered" });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Insert user (student_id is null for ADMIN/ADVISORY)
     const [result] = await pool.query(
       `INSERT INTO users (role, student_id, full_name, email, password_hash)
        VALUES (?, ?, ?, ?, ?)`,

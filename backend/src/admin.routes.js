@@ -4,8 +4,11 @@ const { pool } = require("./db");
 const { authMiddleware } = require("./middleware/auth.middleware");
 const { roleMiddleware } = require("./middleware/role.middleware");
 
-
 const adminRouter = express.Router();
+
+function isStaffEmail(email) {
+  return String(email || "").trim().toLowerCase().endsWith("@kln.ac.lk");
+}
 
 // ✅ GET all users (ADMIN only)
 adminRouter.get("/users", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
@@ -27,10 +30,18 @@ adminRouter.post(
   roleMiddleware(["ADMIN"]),
   async (req, res) => {
     try {
-      const { fullName, email } = req.body;
+      const fullName = String(req.body?.fullName || "").trim();
+      const email = String(req.body?.email || "").trim().toLowerCase();
 
       if (!fullName || !email) {
         return res.status(400).json({ message: "fullName and email are required" });
+      }
+
+      // ✅ Enforce advisory email domain
+      if (!isStaffEmail(email)) {
+        return res.status(400).json({
+          message: "Advisory email must be an official @kln.ac.lk email",
+        });
       }
 
       const [existingEmail] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
@@ -38,6 +49,7 @@ adminRouter.post(
         return res.status(409).json({ message: "Email already registered" });
       }
 
+      // Generate a temporary password (admin will share it with the advisory member)
       const tempPassword = "Adv@" + Math.random().toString(36).slice(2, 10);
       const passwordHash = await bcrypt.hash(tempPassword, 12);
 

@@ -21,12 +21,23 @@ export default function AdminHome() {
         <Text style={styles.cardText}>View All Users</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminSports")}>
-  <Text style={styles.cardText}>Manage Sports</Text>
-</TouchableOpacity>
+      {/* Manage sports */}
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push("/adminSports")}
+      >
+        <Text style={styles.cardText}>Manage Sports</Text>
+      </TouchableOpacity>
 
+      {/* ✅ NEW: Approve sport enrollments */}
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push("/adminEnrollments")}
+      >
+        <Text style={styles.cardText}>Approve Sport Enrollments</Text>
+      </TouchableOpacity>
 
-      {/* Create advisory (next step) */}
+      {/* Create advisory */}
       <TouchableOpacity
         style={styles.card}
         onPress={() => router.push("/createAdvisory")}

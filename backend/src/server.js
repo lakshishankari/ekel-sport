@@ -4,6 +4,8 @@ const cors = require("cors");
 const { router } = require("./routes");
 const { authRouter } = require("./auth.routes");
 const { adminRouter } = require("./admin.routes");
+const { studentRouter } = require("./student.routes");
+
 
 
 const app = express();
@@ -14,6 +16,8 @@ app.use(express.json());
 app.use("/api", router);
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/student", studentRouter);
+
 
 
 app.get("/", (req, res) => {

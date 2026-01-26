@@ -21,6 +21,11 @@ export default function AdminHome() {
         <Text style={styles.cardText}>View All Users</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminSports")}>
+  <Text style={styles.cardText}>Manage Sports</Text>
+</TouchableOpacity>
+
+
       {/* Create advisory (next step) */}
       <TouchableOpacity
         style={styles.card}

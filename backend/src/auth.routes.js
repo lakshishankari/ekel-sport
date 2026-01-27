@@ -15,9 +15,19 @@ function signToken(user) {
 
 // Helpers
 function isStudentEmail(email) {
-  // Student email format: shankar-im22048@stu.kln.ac.lk
-  const studentEmailRegex = /^[a-zA-Z0-9._-]+-im\d+@stu\.kln\.ac\.lk$/;
+  // Student email format: shankar-im2022048@stu.kln.ac.lk or shankar-py2023123@stu.kln.ac.lk
+  // Accepts: name-<dept><year><serial>@stu.kln.ac.lk where dept is 2+ letters
+  const studentEmailRegex = /^[a-zA-Z0-9._-]+-[a-z]{2,}\d+@stu\.kln\.ac\.lk$/;
   return studentEmailRegex.test(String(email || "").trim().toLowerCase());
+}
+
+function isValidStudentId(studentId) {
+  // Format: DEPT/YEAR/SERIAL (e.g., IM/2022/048, PY/2023/123, CS/2021/017)
+  // DEPT: 2-4 uppercase letters
+  // YEAR: 4-digit year
+  // SERIAL: 3-digit serial number
+  const studentIdRegex = /^[A-Z]{2,4}\/\d{4}\/\d{3}$/;
+  return studentIdRegex.test(String(studentId || "").trim());
 }
 
 function isStaffEmail(email) {
@@ -46,9 +56,15 @@ authRouter.post("/register-student", async (req, res) => {
       });
     }
 
+    if (!isValidStudentId(studentId)) {
+      return res.status(400).json({
+        message: "Student ID must be in format: DEPT/YEAR/SERIAL (e.g., IM/2022/048)",
+      });
+    }
+
     if (!isStudentEmail(email)) {
       return res.status(400).json({
-        message: "Student email must be like shankar-im22048@stu.kln.ac.lk",
+        message: "Student email must be like shankar-im2022048@stu.kln.ac.lk",
       });
     }
 
@@ -126,9 +142,15 @@ authRouter.post("/register", async (req, res) => {
       if (!studentId) {
         return res.status(400).json({ message: "studentId is required for STUDENT" });
       }
+      if (!isValidStudentId(studentId)) {
+        return res.status(400).json({
+          message: "Student ID must be in format: DEPT/YEAR/SERIAL (e.g., IM/2022/048)",
+        });
+      }
+
       if (!isStudentEmail(email)) {
         return res.status(400).json({
-          message: "Student email must be like shankar-im22048@stu.kln.ac.lk",
+          message: "Student email must be like shankar-im2022048@stu.kln.ac.lk",
         });
       }
 

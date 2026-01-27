@@ -26,13 +26,21 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
 
   const emailHint = useMemo(
-    () => "Student email format: shankar-im22048@stu.kln.ac.lk",
+    () => "Student ID format: IM/2022/048 (DEPT/YEAR/SERIAL)",
     []
   );
 
+  function isValidStudentId(value: string) {
+    // Format: DEPT/YEAR/SERIAL (e.g., IM/2022/048)
+    const regex = /^[A-Z]{2,4}\/\d{4}\/\d{3}$/;
+    return regex.test(value.trim());
+  }
+
   function isValidStudentEmail(value: string) {
+    // Format: name-dept2022serial@stu.kln.ac.lk (e.g., shankar-im2022048@stu.kln.ac.lk)
     const v = value.trim().toLowerCase();
-    return v.endsWith("@stu.kln.ac.lk");
+    const regex = /^[a-z0-9._-]+-[a-z]{2,}\d+@stu\.kln\.ac\.lk$/;
+    return regex.test(v);
   }
 
   async function onRegister() {
@@ -47,10 +55,18 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (!isValidStudentId(sid)) {
+      Alert.alert(
+        "Invalid Student ID",
+        "Use format: DEPT/YEAR/SERIAL\nExamples:\n• IM/2022/048\n• PY/2023/123\n• CS/2021/017"
+      );
+      return;
+    }
+
     if (!isValidStudentEmail(em)) {
       Alert.alert(
         "Invalid student email",
-        "Use your university student email like: name-im22048@stu.kln.ac.lk"
+        "Use your university student email like: shankar-im2022048@stu.kln.ac.lk"
       );
       return;
     }
@@ -68,18 +84,36 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
 
-      // ✅ IMPORTANT: use the student self-registration endpoint
-      await apiPost<{ message: string }>("/api/auth/register-student", {
+      // ✅ NEW FLOW: Send OTP for email verification
+      await apiPost<{ message: string }>("/api/auth-otp/send-registration-otp", {
         studentId: sid,
         fullName: name,
         email: em,
         password: pw,
       });
 
-      Alert.alert("Success", "Account created! Now login.");
-      router.replace("/login");
+      Alert.alert(
+        "OTP Sent! 📧",
+        "We've sent a verification code to your email. Please check your inbox (and spam folder).",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              router.push({
+                pathname: "/verifyRegistrationOtp",
+                params: {
+                  email: em,
+                  studentId: sid,
+                  fullName: name,
+                  password: pw,
+                },
+              });
+            },
+          },
+        ]
+      );
     } catch (e: any) {
-      Alert.alert("Register failed", e?.message || "Try again.");
+      Alert.alert("Failed to send OTP", e?.message || "Try again.");
     } finally {
       setLoading(false);
     }
@@ -96,7 +130,7 @@ export default function RegisterScreen() {
         <Text style={styles.label}>Student ID</Text>
         <TextInput
           style={styles.input}
-          placeholder="IM22048"
+          placeholder="IM/2022/048"
           placeholderTextColor="#6B7280"
           value={studentId}
           onChangeText={setStudentId}
@@ -115,7 +149,7 @@ export default function RegisterScreen() {
         <Text style={styles.label}>University email</Text>
         <TextInput
           style={styles.input}
-          placeholder="shankar-im22048@stu.kln.ac.lk"
+          placeholder="shankar-im2022048@stu.kln.ac.lk"
           placeholderTextColor="#6B7280"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -164,7 +198,7 @@ export default function RegisterScreen() {
           {loading ? (
             <ActivityIndicator />
           ) : (
-            <Text style={styles.primaryBtnText}>Register</Text>
+            <Text style={styles.primaryBtnText}>Send OTP</Text>
           )}
         </TouchableOpacity>
 

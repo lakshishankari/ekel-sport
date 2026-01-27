@@ -89,22 +89,11 @@ export default function LoginScreen() {
       </View>
 
       <TouchableOpacity style={styles.primaryBtn} onPress={onLogin} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={styles.primaryBtnText}>Login</Text>
-        )}
+        {loading ? <ActivityIndicator /> : <Text style={styles.primaryBtnText}>Login</Text>}
       </TouchableOpacity>
 
-      {/* Forgot Password (UI only for now) */}
-      <TouchableOpacity
-        onPress={() =>
-          Alert.alert(
-            "Forgot password",
-            "For now, Admin/Advisory passwords are handled by the system. We can add a reset feature later."
-          )
-        }
-      >
+      {/* Forgot Password */}
+      <TouchableOpacity onPress={() => router.push("/forgotPassword" as Href)}>
         <Text style={styles.link}>Forgot password?</Text>
       </TouchableOpacity>
 

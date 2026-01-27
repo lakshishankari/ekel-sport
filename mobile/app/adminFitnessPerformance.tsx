@@ -16,8 +16,9 @@ type Participant = { student_user_id: number; full_name: string; student_id: str
 type FitnessRow = {
   student_user_id: number;
   full_name: string;
+  student_id: string;
   metric: string; // e.g. "Beep Test", "Sprint 100m"
-  value: string;  // decimal(10,2) — score or raw
+  value: string;  // decimal(10,2)
   notes: string;
 };
 
@@ -40,11 +41,11 @@ const DUMMY_DIVISIONS: Division[] = [
 
 const DUMMY_PARTICIPANTS: Record<number, Participant[]> = {
   3101: [
-    { student_user_id: 11, full_name: "Test Student 1", student_id: "IM00001" },
-    { student_user_id: 12, full_name: "Test Student 2", student_id: "IM99999" },
+    { student_user_id: 11, full_name: "Test Student 1", student_id: "IM/2022/048" },
+    { student_user_id: 12, full_name: "Test Student 2", student_id: "IM/2022/123" },
   ],
-  3102: [{ student_user_id: 13, full_name: "Test Student 3", student_id: "IM12345" }],
-  3201: [{ student_user_id: 12, full_name: "Test Student 2", student_id: "IM99999" }],
+  3102: [{ student_user_id: 13, full_name: "Test Student 3", student_id: "IM/2022/077" }],
+  3201: [{ student_user_id: 12, full_name: "Test Student 2", student_id: "IM/2022/123" }],
 };
 
 export default function AdminFitnessPerformance() {
@@ -78,6 +79,7 @@ export default function AdminFitnessPerformance() {
     (DUMMY_PARTICIPANTS[divisionId] ?? []).map((p) => ({
       student_user_id: p.student_user_id,
       full_name: p.full_name,
+      student_id: p.student_id,
       metric: defaultMetric,
       value: "",
       notes: "",
@@ -89,6 +91,7 @@ export default function AdminFitnessPerformance() {
       participants.map((p) => ({
         student_user_id: p.student_user_id,
         full_name: p.full_name,
+        student_id: p.student_id,
         metric: defaultMetric,
         value: "",
         notes: "",
@@ -101,11 +104,6 @@ export default function AdminFitnessPerformance() {
   };
 
   const onSave = () => {
-    // Later: POST performance_entries rows with:
-    // event_division_id = divisionId
-    // type = 'FITNESS'
-    // title = sessionTitle
-    // metric/value/notes
     Alert.alert("Saved (Demo)", `event_division_id: ${divisionId}\nTitle: ${sessionTitle}\nRows: ${rows.length}`);
   };
 
@@ -153,9 +151,7 @@ export default function AdminFitnessPerformance() {
 
           <View style={styles.metaRow}>
             <Ionicons name="information-circle-outline" size={18} color="rgba(229,231,235,0.85)" />
-            <Text style={styles.metaText}>
-              DB mapping: events → event_divisions → performance_entries(type=FITNESS)
-            </Text>
+            <Text style={styles.metaText}>DB mapping: events → event_divisions → performance_entries(type=FITNESS)</Text>
           </View>
         </AppCard>
 
@@ -180,7 +176,7 @@ export default function AdminFitnessPerformance() {
         <AppCard style={{ marginBottom: 14 }}>
           <Text style={styles.sectionTitle}>Session Details</Text>
 
-          <Text style={styles.label}>Title (stored in performance_entries.title)</Text>
+          <Text style={styles.label}>Title (performance_entries.title)</Text>
           <TextInput
             value={sessionTitle}
             onChangeText={setSessionTitle}
@@ -189,7 +185,7 @@ export default function AdminFitnessPerformance() {
             placeholderTextColor="rgba(229,231,235,0.40)"
           />
 
-          <Text style={styles.label}>Default Metric (stored in performance_entries.metric)</Text>
+          <Text style={styles.label}>Default Metric (performance_entries.metric)</Text>
           <TextInput
             value={defaultMetric}
             onChangeText={setDefaultMetric}
@@ -217,7 +213,7 @@ export default function AdminFitnessPerformance() {
                       {r.full_name}
                     </Text>
                     <Text style={styles.playerSub} numberOfLines={1}>
-                      student_user_id: {r.student_user_id}
+                      {r.student_id}
                     </Text>
                   </View>
 

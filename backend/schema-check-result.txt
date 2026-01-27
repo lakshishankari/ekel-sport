@@ -1,0 +1,44 @@
+🔍 Checking database schema...
+
+📋 Available tables:
+  - event_divisions
+  - event_results
+  - event_team_members
+  - events
+  - notifications
+  - otp_codes
+  - password_reset_otps
+  - performance_entries
+  - sport_criteria_weightages
+  - sport_enrollments
+  - sport_roles
+  - sports
+  - student_profiles
+  - student_team_assignment
+  - users
+
+📊 Checking otp_codes table...
+✅ otp_codes table exists:
+  - id (bigint unsigned) NO PRI 
+  - email (varchar(255)) NO MUL 
+  - purpose (enum('REGISTER','RESET_PASSWORD')) NO  
+  - otp_hash (varchar(255)) NO  
+  - expires_at (datetime) NO MUL 
+  - used_at (datetime) YES  
+  - attempts (int) NO  0
+  - created_at (timestamp) NO  CURRENT_TIMESTAMP
+
+📊 Checking password_reset_otps table...
+✅ password_reset_otps table exists:
+  - id (bigint unsigned) NO PRI 
+  - user_id (bigint unsigned) NO MUL 
+  - otp_hash (varchar(255)) NO  
+  - expires_at (datetime) NO MUL 
+  - attempts (int) NO  0
+  - used_at (datetime) YES  
+  - created_at (timestamp) YES  CURRENT_TIMESTAMP
+
+📊 Checking users table password field...
+✅ Password field: password_hash (varchar(255))
+
+✅ Schema check complete!

@@ -16,8 +16,9 @@ type Student = { student_user_id: number; full_name: string; student_id: string 
 type DiscRow = {
   student_user_id: number;
   full_name: string;
-  metric: string; // "Warning", "Penalty", "Discipline Score"
-  value: string;  // decimal(10,2) – can be points deduction or score
+  student_id: string;
+  metric: string;
+  value: string; // decimal(10,2)
   notes: string;
 };
 
@@ -40,11 +41,11 @@ const DUMMY_DIVISIONS: Division[] = [
 
 const DUMMY_STUDENTS: Record<number, Student[]> = {
   4101: [
-    { student_user_id: 11, full_name: "Test Student 1", student_id: "IM00001" },
-    { student_user_id: 12, full_name: "Test Student 2", student_id: "IM99999" },
+    { student_user_id: 11, full_name: "Test Student 1", student_id: "IM/2022/048" },
+    { student_user_id: 12, full_name: "Test Student 2", student_id: "IM/2022/123" },
   ],
-  4102: [{ student_user_id: 13, full_name: "Test Student 3", student_id: "IM12345" }],
-  4201: [{ student_user_id: 12, full_name: "Test Student 2", student_id: "IM99999" }],
+  4102: [{ student_user_id: 13, full_name: "Test Student 3", student_id: "IM/2022/077" }],
+  4201: [{ student_user_id: 12, full_name: "Test Student 2", student_id: "IM/2022/123" }],
 };
 
 export default function AdminDisciplinePerformance() {
@@ -78,6 +79,7 @@ export default function AdminDisciplinePerformance() {
     (DUMMY_STUDENTS[divisionId] ?? []).map((s) => ({
       student_user_id: s.student_user_id,
       full_name: s.full_name,
+      student_id: s.student_id,
       metric: defaultMetric,
       value: "",
       notes: "",
@@ -89,6 +91,7 @@ export default function AdminDisciplinePerformance() {
       students.map((s) => ({
         student_user_id: s.student_user_id,
         full_name: s.full_name,
+        student_id: s.student_id,
         metric: defaultMetric,
         value: "",
         notes: "",
@@ -101,10 +104,6 @@ export default function AdminDisciplinePerformance() {
   };
 
   const onSave = () => {
-    // Later: POST performance_entries rows with:
-    // event_division_id = divisionId
-    // type = 'DISCIPLINE'
-    // title = reviewTitle
     Alert.alert("Saved (Demo)", `event_division_id: ${divisionId}\nTitle: ${reviewTitle}\nRows: ${rows.length}`);
   };
 
@@ -152,9 +151,7 @@ export default function AdminDisciplinePerformance() {
 
           <View style={styles.metaRow}>
             <Ionicons name="information-circle-outline" size={18} color="rgba(229,231,235,0.85)" />
-            <Text style={styles.metaText}>
-              DB mapping: events → event_divisions → performance_entries(type=DISCIPLINE)
-            </Text>
+            <Text style={styles.metaText}>DB mapping: events → event_divisions → performance_entries(type=DISCIPLINE)</Text>
           </View>
         </AppCard>
 
@@ -179,7 +176,7 @@ export default function AdminDisciplinePerformance() {
         <AppCard style={{ marginBottom: 14 }}>
           <Text style={styles.sectionTitle}>Review Details</Text>
 
-          <Text style={styles.label}>Title (stored in performance_entries.title)</Text>
+          <Text style={styles.label}>Title (performance_entries.title)</Text>
           <TextInput
             value={reviewTitle}
             onChangeText={setReviewTitle}
@@ -188,7 +185,7 @@ export default function AdminDisciplinePerformance() {
             placeholderTextColor="rgba(229,231,235,0.40)"
           />
 
-          <Text style={styles.label}>Default Metric (stored in performance_entries.metric)</Text>
+          <Text style={styles.label}>Default Metric (performance_entries.metric)</Text>
           <TextInput
             value={defaultMetric}
             onChangeText={setDefaultMetric}
@@ -216,7 +213,7 @@ export default function AdminDisciplinePerformance() {
                       {r.full_name}
                     </Text>
                     <Text style={styles.playerSub} numberOfLines={1}>
-                      student_user_id: {r.student_user_id}
+                      {r.student_id}
                     </Text>
                   </View>
 

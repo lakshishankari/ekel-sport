@@ -7,6 +7,11 @@ export default function RootLayout() {
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
 
+            <Stack.Screen name="forgotPassword" />
+      <Stack.Screen name="verifyOtp" />
+      <Stack.Screen name="resetPassword" />
+
+
       {/* Role-based home */}
       <Stack.Screen name="studentHome" />
       <Stack.Screen name="adminHome" />

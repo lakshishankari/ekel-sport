@@ -1,391 +1,700 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Alert, ScrollView } from "react-native";
-import { router } from "expo-router";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { loadAuth } from "../lib/authStore";
-
+import { router } from "expo-router";
 import Screen from "../components/Screen";
-import AppHeader from "../components/AppHeader";
-import AppCard from "../components/AppCard";
 
-type SportKey = "Cricket" | "Badminton" | "Football";
-
-type CriteriaKey = "Attendance" | "Matches" | "Fitness" | "Discipline";
-
-type CriteriaItem = {
-  key: CriteriaKey;
-  icon: keyof typeof Ionicons.glyphMap;
+type Weightage = {
+  id: string;
+  name: string;
+  weight: number;
   description: string;
 };
 
-const CRITERIA: CriteriaItem[] = [
-  { key: "Attendance", icon: "calendar-outline", description: "Training + sessions attendance score" },
-  { key: "Matches", icon: "trophy-outline", description: "Match participation & contribution score" },
-  { key: "Fitness", icon: "barbell-outline", description: "Fitness tests and benchmarks" },
-  { key: "Discipline", icon: "shield-checkmark-outline", description: "Discipline and conduct review" },
-];
+type SportWeightages = {
+  sport: string;
+  criteria: Weightage[];
+  overallWeight: number;
+};
 
-// Dummy per-sport weightages (professional prototype). Later fetch from API.
-const DEFAULT_WEIGHTAGES: Record<SportKey, Record<CriteriaKey, number>> = {
-  Cricket: { Attendance: 25, Matches: 35, Fitness: 20, Discipline: 20 },
-  Badminton: { Attendance: 35, Matches: 20, Fitness: 25, Discipline: 20 },
-  Football: { Attendance: 20, Matches: 40, Fitness: 25, Discipline: 15 },
+type StudentPerformance = {
+  id: string;
+  name: string;
+  studentId: string;
+  matchScore: number;
+  fitnessScore: number;
+  attendance: number;
+  discipline: number;
+  overall: number;
 };
 
 export default function AdvisoryWeightages() {
-  const [checking, setChecking] = useState(true);
+  const [activeTab, setActiveTab] = useState<"criteria" | "colors">("criteria");
+  const [selectedSport, setSelectedSport] = useState("Cricket");
+  const [loading, setLoading] = useState(false);
 
-  const sports: SportKey[] = ["Cricket", "Badminton", "Football"];
-  const [sport, setSport] = useState<SportKey>("Cricket");
-  const [weights, setWeights] = useState<Record<CriteriaKey, number>>(DEFAULT_WEIGHTAGES["Cricket"]);
+  // Mock data - each sport has 4 criteria that must total 100%
+  const [weightages, setWeightages] = useState<SportWeightages[]>([
+    {
+      sport: "Cricket",
+      overallWeight: 35,
+      criteria: [
+        { id: "1", name: "Match Performance", weight: 40, description: "Runs, wickets, catches, etc." },
+        { id: "2", name: "Fitness Tests", weight: 25, description: "Physical assessment scores" },
+        { id: "3", name: "Attendance", weight: 20, description: "Practice session attendance" },
+        { id: "4", name: "Discipline", weight: 15, description: "Conduct and behavior" },
+      ],
+    },
+    {
+      sport: "Basketball",
+      overallWeight: 30,
+      criteria: [
+        { id: "1", name: "Match Performance", weight: 35, description: "Points, assists, rebounds" },
+        { id: "2", name: "Fitness Tests", weight: 30, description: "Physical assessment scores" },
+        { id: "3", name: "Attendance", weight: 20, description: "Practice session attendance" },
+        { id: "4", name: "Discipline", weight: 15, description: "Conduct and behavior" },
+      ],
+    },
+    {
+      sport: "Football",
+      overallWeight: 35,
+      criteria: [
+        { id: "1", name: "Match Performance", weight: 40, description: "Goals, assists, defense" },
+        { id: "2", name: "Fitness Tests", weight: 25, description: "Physical assessment scores" },
+        { id: "3", name: "Attendance", weight: 20, description: "Practice session attendance" },
+        { id: "4", name: "Discipline", weight: 15, description: "Conduct and behavior" },
+      ],
+    },
+  ]);
 
-  useEffect(() => {
-    (async () => {
-      const { token, role } = await loadAuth();
-      if (!token || role !== "ADVISORY") {
-        router.replace("/login");
-        return;
-      }
-      setChecking(false);
-    })();
-  }, []);
+  // Mock student performance data
+  const studentPerformance: StudentPerformance[] = [
+    {
+      id: "1",
+      name: "Diwanja Kumar",
+      studentId: "IM/2022/051",
+      matchScore: 85,
+      fitnessScore: 78,
+      attendance: 92,
+      discipline: 88,
+      overall: 84.5,
+    },
+    {
+      id: "2",
+      name: "John Smith",
+      studentId: "CS/2022/123",
+      matchScore: 72,
+      fitnessScore: 85,
+      attendance: 88,
+      discipline: 90,
+      overall: 80.2,
+    },
+    {
+      id: "3",
+      name: "Jane Doe",
+      studentId: "PY/2023/045",
+      matchScore: 65,
+      fitnessScore: 70,
+      attendance: 75,
+      discipline: 82,
+      overall: 71.8,
+    },
+  ];
 
-  // When sport changes, load dummy weights for that sport
-  useEffect(() => {
-    setWeights(DEFAULT_WEIGHTAGES[sport]);
-  }, [sport]);
+  const currentWeightages = weightages.find((w) => w.sport === selectedSport);
+  const totalCriteriaWeight = currentWeightages?.criteria.reduce((sum, c) => sum + c.weight, 0) || 0;
+  const totalOverallWeight = weightages.reduce((sum, w) => sum + w.overallWeight, 0);
 
-  const total = useMemo(() => {
-    return CRITERIA.reduce((sum, c) => sum + (Number(weights[c.key]) || 0), 0);
-  }, [weights]);
-
-  const totalOk = total === 100;
-
-  const setWeight = (key: CriteriaKey, value: string) => {
-    // allow empty while typing
-    if (value === "") {
-      setWeights((prev) => ({ ...prev, [key]: 0 }));
-      return;
-    }
-
-    // only digits
-    const cleaned = value.replace(/[^\d]/g, "");
-    const num = Math.max(0, Math.min(100, Number(cleaned || 0)));
-
-    setWeights((prev) => ({ ...prev, [key]: num }));
+  const updateWeight = (sportName: string, criteriaId: string, newWeight: string) => {
+    const numWeight = parseInt(newWeight) || 0;
+    setWeightages((prev) =>
+      prev.map((sport) => {
+        if (sport.sport !== sportName) return sport;
+        return {
+          ...sport,
+          criteria: sport.criteria.map((c) =>
+            c.id === criteriaId ? { ...c, weight: numWeight } : c
+          ),
+        };
+      })
+    );
   };
 
-  const onSave = () => {
-    if (!totalOk) {
-      Alert.alert("Total must be 100%", `Current total is ${total}%. Please adjust weightages.`);
+  const updateOverallWeight = (sportName: string, newWeight: string) => {
+    const numWeight = parseInt(newWeight) || 0;
+    setWeightages((prev) =>
+      prev.map((sport) =>
+        sport.sport === sportName ? { ...sport, overallWeight: numWeight } : sport
+      )
+    );
+  };
+
+  const saveWeightages = async () => {
+    if (activeTab === "criteria" && totalCriteriaWeight !== 100) {
+      Alert.alert("Invalid Weightages", "Criteria weightages must equal 100%");
+      return;
+    }
+    if (activeTab === "colors" && totalOverallWeight !== 100) {
+      Alert.alert("Invalid Weightages", "Overall colors weightages must equal 100%");
       return;
     }
 
-    // Demo save (later call API)
-    Alert.alert("Saved (Demo)", `Weightages saved for ${sport}.`);
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      Alert.alert("Success", "Weightages saved successfully");
+    }, 1000);
   };
 
   return (
     <Screen>
-      <AppHeader
-        title="Colours Weightages"
-        subtitle="Configure criteria weights per sport (total must be 100%)."
-        showBack
-      />
-
-      {/* Sport selector */}
-      <AppCard style={{ marginBottom: 14 }}>
-        <Text style={styles.sectionTitle}>Select Sport</Text>
-        <View style={styles.chipsRow}>
-          {sports.map((s) => {
-            const active = s === sport;
-            return (
-              <Pressable
-                key={s}
-                onPress={() => setSport(s)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  active && styles.chipActive,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{s}</Text>
-              </Pressable>
-            );
-          })}
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={24} color="#F9FAFB" />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>Manage Weightages</Text>
+          <Text style={styles.headerSubtitle}>
+            Review performance data and set weightages for colours eligibility
+          </Text>
         </View>
-        <Text style={styles.smallHint}>
-          Weightages can vary by sport depending on match frequency and training structure.
-        </Text>
-      </AppCard>
+      </View>
 
-      {/* Criteria editor */}
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <AppCard>
-          <View style={styles.totalRow}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name="options-outline" size={18} color="#F9FAFB" />
-              <Text style={styles.sectionTitle}>Criteria</Text>
-            </View>
-
-            <View style={[styles.totalBadge, totalOk ? styles.totalOk : styles.totalBad]}>
-              <Text style={styles.totalText}>{total}%</Text>
-              <Ionicons
-                name={totalOk ? "checkmark-circle-outline" : "alert-circle-outline"}
-                size={16}
-                color={totalOk ? "rgba(16,185,129,0.95)" : "rgba(239,68,68,0.95)"}
-              />
-            </View>
-          </View>
-
-          <Text style={styles.subText}>Adjust each criterion weight (%) for {sport}.</Text>
-
-          {CRITERIA.map((c) => (
-            <View key={c.key} style={styles.criteriaRow}>
-              <View style={styles.iconBox}>
-                <Ionicons name={c.icon} size={18} color="#F9FAFB" />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.criteriaTitle}>{c.key}</Text>
-                <Text style={styles.criteriaDesc}>{c.description}</Text>
-              </View>
-
-              <View style={styles.inputWrap}>
-                <TextInput
-                  value={String(weights[c.key] ?? 0)}
-                  onChangeText={(t) => setWeight(c.key, t)}
-                  keyboardType="numeric"
-                  style={styles.input}
-                  maxLength={3}
-                />
-                <Text style={styles.percent}>%</Text>
-              </View>
-            </View>
-          ))}
-
-          <View style={[styles.noteBox, !totalOk && styles.noteBoxWarn]}>
-            <Ionicons
-              name={totalOk ? "information-circle-outline" : "warning-outline"}
-              size={18}
-              color={totalOk ? "rgba(229,231,235,0.85)" : "rgba(239,68,68,0.95)"}
-            />
-            <Text style={styles.noteText}>
-              {totalOk
-                ? "Total weight is valid. You can save these weightages."
-                : `Total must be 100%. You currently have ${total}%.`}
-            </Text>
-          </View>
-        </AppCard>
-
-        <Pressable style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.85 }]} onPress={onSave}>
-          <Ionicons name="save-outline" size={18} color="#111827" />
-          <Text style={styles.saveText}>Save Weightages</Text>
-        </Pressable>
-
+      {/* Tab Switcher */}
+      <View style={styles.tabContainer}>
         <Pressable
-          style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}
-          onPress={() => router.push("/reports")}
+          style={[styles.tab, activeTab === "criteria" && styles.tabActive]}
+          onPress={() => setActiveTab("criteria")}
         >
-          <Ionicons name="analytics-outline" size={18} color="#F9FAFB" />
-          <Text style={styles.secondaryText}>Open Reports & Analytics</Text>
+          <Text style={[styles.tabText, activeTab === "criteria" && styles.tabTextActive]}>
+            Criteria Weightages
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, activeTab === "colors" && styles.tabActive]}
+          onPress={() => setActiveTab("colors")}
+        >
+          <Text style={[styles.tabText, activeTab === "colors" && styles.tabTextActive]}>
+            Overall Colors Weight
+          </Text>
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+        {activeTab === "criteria" ? (
+          <>
+            {/* Sport Selector */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sport Selection</Text>
+              <Text style={styles.sectionSubtitle}>
+                Choose a sport to configure criteria weightages
+              </Text>
+              <View style={styles.sportBtns}>
+                {weightages.map((w) => (
+                  <Pressable
+                    key={w.sport}
+                    style={[
+                      styles.sportBtn,
+                      selectedSport === w.sport && styles.sportBtnActive,
+                    ]}
+                    onPress={() => setSelectedSport(w.sport)}
+                  >
+                    <Text
+                      style={[
+                        styles.sportBtnText,
+                        selectedSport === w.sport && styles.sportBtnTextActive,
+                      ]}
+                    >
+                      {w.sport}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Performance Analytics */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Student Performance Overview</Text>
+              <Text style={styles.sectionSubtitle}>
+                Review current scores across all criteria for {selectedSport}
+              </Text>
+
+              {studentPerformance.map((student) => (
+                <View key={student.id} style={styles.studentCard}>
+                  <View style={styles.studentHeader}>
+                    <View>
+                      <Text style={styles.studentName}>{student.name}</Text>
+                      <Text style={styles.studentId}>{student.studentId}</Text>
+                    </View>
+                    <View style={styles.overallBadge}>
+                      <Text style={styles.overallScore}>{student.overall}</Text>
+                      <Text style={styles.overallLabel}>Overall</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.scoreGrid}>
+                    <View style={styles.scoreItem}>
+                      <Text style={styles.scoreLabel}>Match</Text>
+                      <Text style={styles.scoreValue}>{student.matchScore}</Text>
+                    </View>
+                    <View style={styles.scoreItem}>
+                      <Text style={styles.scoreLabel}>Fitness</Text>
+                      <Text style={styles.scoreValue}>{student.fitnessScore}</Text>
+                    </View>
+                    <View style={styles.scoreItem}>
+                      <Text style={styles.scoreLabel}>Attendance</Text>
+                      <Text style={styles.scoreValue}>{student.attendance}</Text>
+                    </View>
+                    <View style={styles.scoreItem}>
+                      <Text style={styles.scoreLabel}>Discipline</Text>
+                      <Text style={styles.scoreValue}>{student.discipline}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Criteria Configuration */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Criteria Weightages</Text>
+              <Text style={styles.sectionSubtitle}>
+                Set the weight for each criterion (must total 100%)
+              </Text>
+
+              {currentWeightages?.criteria.map((criteria) => (
+                <View key={criteria.id} style={styles.criteriaCard}>
+                  <View style={styles.criteriaInfo}>
+                    <Text style={styles.criteriaName}>{criteria.name}</Text>
+                    <Text style={styles.criteriaDesc}>{criteria.description}</Text>
+                  </View>
+                  <View style={styles.valueContainer}>
+                    <Text style={styles.valueLabel}>Value</Text>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        value={String(criteria.weight)}
+                        onChangeText={(val) =>
+                          updateWeight(selectedSport, criteria.id, val)
+                        }
+                        keyboardType="number-pad"
+                        style={styles.input}
+                        maxLength={3}
+                        placeholderTextColor="#6B7280"
+                      />
+                      <Text style={styles.percentLabel}>%</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {/* Total Display */}
+              <View style={styles.totalCard}>
+                <Text style={styles.totalLabel}>Total Weight</Text>
+                <View
+                  style={[
+                    styles.totalValue,
+                    totalCriteriaWeight === 100 ? styles.validTotal : styles.invalidTotal,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.totalText,
+                      totalCriteriaWeight === 100 ? styles.validText : styles.invalidText,
+                    ]}
+                  >
+                    {totalCriteriaWeight}%
+                  </Text>
+                  {totalCriteriaWeight === 100 ? (
+                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                  ) : (
+                    <Ionicons name="alert-circle" size={20} color="#EF4444" />
+                  )}
+                </View>
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Overall Colors Weightages */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Overall Colors Weightages</Text>
+              <Text style={styles.sectionSubtitle}>
+                Set the overall weight for each sport in colors eligibility (must total 100%)
+              </Text>
+
+              {weightages.map((sport) => (
+                <View key={sport.sport} style={styles.criteriaCard}>
+                  <View style={styles.criteriaInfo}>
+                    <Text style={styles.criteriaName}>{sport.sport}</Text>
+                    <Text style={styles.criteriaDesc}>
+                      Overall contribution to colors eligibility
+                    </Text>
+                  </View>
+                  <View style={styles.valueContainer}>
+                    <Text style={styles.valueLabel}>Value</Text>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        value={String(sport.overallWeight)}
+                        onChangeText={(val) => updateOverallWeight(sport.sport, val)}
+                        keyboardType="number-pad"
+                        style={styles.input}
+                        maxLength={3}
+                        placeholderTextColor="#6B7280"
+                      />
+                      <Text style={styles.percentLabel}>%</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {/* Total Display */}
+              <View style={styles.totalCard}>
+                <Text style={styles.totalLabel}>Total Weight</Text>
+                <View
+                  style={[
+                    styles.totalValue,
+                    totalOverallWeight === 100 ? styles.validTotal : styles.invalidTotal,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.totalText,
+                      totalOverallWeight === 100 ? styles.validText : styles.invalidText,
+                    ]}
+                  >
+                    {totalOverallWeight}%
+                  </Text>
+                  {totalOverallWeight === 100 ? (
+                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                  ) : (
+                    <Ionicons name="alert-circle" size={20} color="#EF4444" />
+                  )}
+                </View>
+              </View>
+
+              {/* Info Box */}
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle" size={20} color="#C9A227" />
+                <Text style={styles.infoText}>
+                  The overall colors weightage determines how much each sport contributes to a
+                  student's final colors eligibility score.
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Save Button */}
+        <Pressable
+          style={[
+            styles.saveBtn,
+            (loading ||
+              (activeTab === "criteria" && totalCriteriaWeight !== 100) ||
+              (activeTab === "colors" && totalOverallWeight !== 100)) && {
+              opacity: 0.5,
+            },
+          ]}
+          onPress={saveWeightages}
+          disabled={
+            loading ||
+            (activeTab === "criteria" && totalCriteriaWeight !== 100) ||
+            (activeTab === "colors" && totalOverallWeight !== 100)
+          }
+        >
+          <Ionicons name="save" size={20} color="#0B0F14" />
+          <Text style={styles.saveBtnText}>
+            {loading ? "Saving..." : `Save ${activeTab === "criteria" ? "Criteria" : "Colors"} Weightages`}
+          </Text>
         </Pressable>
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 12,
+  },
+  backBtn: {
+    padding: 4,
+  },
+  headerTitle: {
+    color: "#F9FAFB",
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  headerSubtitle: {
+    color: "rgba(229,231,235,0.6)",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  tabContainer: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 10,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 12,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  tabActive: {
+    backgroundColor: "#C9A227",
+  },
+  tabText: {
+    color: "#A7B0BE",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  tabTextActive: {
+    color: "#0B0F14",
+  },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  section: {
+    marginTop: 20,
+    backgroundColor: "rgba(18, 24, 38, 0.8)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
   sectionTitle: {
     color: "#F9FAFB",
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "900",
+    marginBottom: 4,
   },
-  subText: {
-    marginTop: 8,
-    color: "rgba(229,231,235,0.75)",
-    fontSize: 12.5,
-    lineHeight: 18,
+  sectionSubtitle: {
+    color: "rgba(229,231,235,0.55)",
+    fontSize: 12,
     fontWeight: "600",
+    marginBottom: 16,
+    lineHeight: 16,
+  },
+  sportBtns: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  sportBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  sportBtnActive: {
+    backgroundColor: "rgba(201,162,39,0.15)",
+    borderColor: "#C9A227",
+  },
+  sportBtnText: {
+    color: "#A7B0BE",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  sportBtnTextActive: {
+    color: "#C9A227",
+  },
+  studentCard: {
+    backgroundColor: "rgba(38, 48, 65, 0.6)",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  studentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
-
-  chipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 12,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    height: 36,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  chipActive: {
-    backgroundColor: "rgba(212,175,55,0.18)",
-    borderColor: "rgba(212,175,55,0.45)",
-  },
-  chipText: {
-    color: "rgba(229,231,235,0.78)",
-    fontSize: 13,
+  studentName: {
+    color: "#F9FAFB",
+    fontSize: 15,
     fontWeight: "800",
   },
-  chipTextActive: {
-    color: "#F9FAFB",
-  },
-  smallHint: {
-    marginTop: 10,
-    color: "rgba(229,231,235,0.65)",
-    fontSize: 12,
-    lineHeight: 17,
+  studentId: {
+    color: "#A7B0BE",
+    fontSize: 11,
     fontWeight: "600",
-  },
-
-  totalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 6,
-  },
-  totalBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    height: 32,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  totalOk: {
-    backgroundColor: "rgba(16,185,129,0.08)",
-    borderColor: "rgba(16,185,129,0.35)",
-  },
-  totalBad: {
-    backgroundColor: "rgba(239,68,68,0.08)",
-    borderColor: "rgba(239,68,68,0.35)",
-  },
-  totalText: {
-    color: "#F9FAFB",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-
-  criteriaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
-  },
-  iconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  criteriaTitle: {
-    color: "#F9FAFB",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  criteriaDesc: {
     marginTop: 2,
-    color: "rgba(229,231,235,0.65)",
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "600",
   },
-
-  inputWrap: {
-    flexDirection: "row",
+  overallBadge: {
+    backgroundColor: "rgba(201,162,39,0.15)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
   },
-  input: {
-    minWidth: 34,
-    textAlign: "right",
-    color: "#F9FAFB",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  percent: {
-    color: "rgba(229,231,235,0.75)",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-
-  noteBox: {
-    marginTop: 12,
-    borderRadius: 14,
-    padding: 12,
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  noteBoxWarn: {
-    backgroundColor: "rgba(239,68,68,0.06)",
-    borderColor: "rgba(239,68,68,0.18)",
-  },
-  noteText: {
-    flex: 1,
-    color: "rgba(229,231,235,0.75)",
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
-
-  saveBtn: {
-    marginTop: 14,
-    height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#C9A227",
-    flexDirection: "row",
-    gap: 8,
-  },
-  saveText: {
-    color: "#111827",
+  overallScore: {
+    color: "#C9A227",
     fontSize: 16,
     fontWeight: "900",
   },
-
-  secondaryBtn: {
-    marginTop: 12,
-    height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+  overallLabel: {
+    color: "#C9A227",
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  scoreGrid: {
     flexDirection: "row",
     gap: 8,
   },
-  secondaryText: {
+  scoreItem: {
+    flex: 1,
+    backgroundColor: "rgba(11, 15, 20, 0.5)",
+    borderRadius: 8,
+    padding: 8,
+    alignItems: "center",
+  },
+  scoreLabel: {
+    color: "rgba(229,231,235,0.5)",
+    fontSize: 10,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  scoreValue: {
     color: "#F9FAFB",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  criteriaCard: {
+    backgroundColor: "rgba(38, 48, 65, 0.6)",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  criteriaInfo: {
+    marginBottom: 12,
+  },
+  criteriaName: {
+    color: "#F9FAFB",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  criteriaDesc: {
+    color: "#A7B0BE",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  valueContainer: {
+    gap: 6,
+  },
+  valueLabel: {
+    color: "rgba(229,231,235,0.5)",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(11, 15, 20, 0.8)",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  input: {
+    flex: 1,
+    color: "#F9FAFB",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  percentLabel: {
+    color: "#A7B0BE",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  totalCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+  },
+  totalLabel: {
+    color: "#F9FAFB",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  totalValue: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  validTotal: {
+    backgroundColor: "rgba(16,185,129,0.1)",
+  },
+  invalidTotal: {
+    backgroundColor: "rgba(239,68,68,0.1)",
+  },
+  totalText: {
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  validText: {
+    color: "#10B981",
+  },
+  invalidText: {
+    color: "#EF4444",
+  },
+  infoBox: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: "rgba(201,162,39,0.08)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.2)",
+  },
+  infoText: {
+    flex: 1,
+    color: "rgba(229,231,235,0.7)",
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 24,
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: "#C9A227",
+  },
+  saveBtnText: {
+    color: "#0B0F14",
     fontSize: 15,
     fontWeight: "900",
   },

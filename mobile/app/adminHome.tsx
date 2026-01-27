@@ -1,96 +1,96 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { router } from "expo-router";
-import { clearAuth } from "../lib/authStore";
+import { loadAuth, clearAuth } from "../lib/authStore";
 
 export default function AdminHome() {
+  useEffect(() => {
+    (async () => {
+      const { token, role } = await loadAuth();
+      if (!token || role !== "ADMIN") router.replace("/login");
+    })();
+  }, []);
+
   async function onLogout() {
     await clearAuth();
     router.replace("/login");
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={{ flex: 1, backgroundColor: "#0B0F14" }} contentContainerStyle={styles.container}>
       <Text style={styles.title}>Admin Dashboard</Text>
+      <Text style={styles.sub}>Manage sports, enrollments, squad/pool, events and reports</Text>
 
-      {/* View all users */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push("/adminUsers")}
-      >
-        <Text style={styles.cardText}>View All Users</Text>
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminUsers")}>
+        <Text style={styles.cardText}>Users</Text>
+        <Text style={styles.cardSub}>View all registered users</Text>
       </TouchableOpacity>
 
-      {/* Manage sports */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push("/adminSports")}
-      >
-        <Text style={styles.cardText}>Manage Sports</Text>
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminSports")}>
+        <Text style={styles.cardText}>Sports</Text>
+        <Text style={styles.cardSub}>Create/manage sports modules</Text>
       </TouchableOpacity>
 
-      {/* ✅ NEW: Approve sport enrollments */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push("/adminEnrollments")}
-      >
-        <Text style={styles.cardText}>Approve Sport Enrollments</Text>
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminEnrollments")}>
+        <Text style={styles.cardText}>Enrollments</Text>
+        <Text style={styles.cardSub}>Approve/reject student requests</Text>
       </TouchableOpacity>
 
-      {/* Create advisory */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push("/createAdvisory")}
-      >
-        <Text style={styles.cardText}>Create Advisory Account</Text>
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminSquadPool")}>
+        <Text style={styles.cardText}>Squad & Pool</Text>
+        <Text style={styles.cardSub}>Select students into Pool/Squad (UI first)</Text>
       </TouchableOpacity>
 
-      {/* Logout */}
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminEvents")}>
+        <Text style={styles.cardText}>Events</Text>
+        <Text style={styles.cardSub}>Create competitions + divisions</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminAddMarks")}>
+        <Text style={styles.cardText}>Marks & Performance</Text>
+        <Text style={styles.cardSub}>Add fitness/discipline/match scores</Text>
+      </TouchableOpacity>
+
+      {/* ✅ Shared screen: Admin + Advisory */}
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/reports")}>
+        <Text style={styles.cardText}>Reports & Analytics</Text>
+        <Text style={styles.cardSub}>Enrollments, attendance, performance (Phase 2)</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/createAdvisory")}>
+        <Text style={styles.cardText}>Create Advisory</Text>
+        <Text style={styles.cardSub}>Create advisory accounts (@kln.ac.lk)</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.logoutBtn} onPress={onLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0B0F14",
-    justifyContent: "center",
-    padding: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "white",
-    marginBottom: 30,
-    textAlign: "center",
-  },
+  container: { padding: 24, paddingBottom: 40 },
+  title: { fontSize: 28, fontWeight: "900", color: "white", textAlign: "center", marginTop: 20 },
+  sub: { color: "#A7B0BE", textAlign: "center", marginTop: 8, marginBottom: 20 },
+
   card: {
     backgroundColor: "#121826",
     borderRadius: 14,
-    padding: 20,
-    marginBottom: 16,
+    padding: 18,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: "#263041",
   },
-  cardText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "700",
-    textAlign: "center",
-  },
+  cardText: { color: "white", fontSize: 16, fontWeight: "900" },
+  cardSub: { color: "#A7B0BE", marginTop: 6, fontSize: 13 },
+
   logoutBtn: {
-    marginTop: 30,
+    marginTop: 16,
     backgroundColor: "#D4AF37",
     padding: 14,
     borderRadius: 14,
     alignItems: "center",
   },
-  logoutText: {
-    fontWeight: "800",
-    fontSize: 16,
-    color: "#111827",
-  },
+  logoutText: { fontWeight: "900", fontSize: 16, color: "#111827" },
 });

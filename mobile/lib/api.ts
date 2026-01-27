@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "./config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type UserRole = "STUDENT" | "ADMIN" | "ADVISORY";
 
@@ -10,16 +11,7 @@ export type ApiUser = {
   email: string;
 };
 
-/**
- * IMPORTANT:
- * Your backend routes are mounted like:
- *   app.use("/api/auth", authRoutes);
- * So from mobile you should call:
- *   apiPost("/api/auth/login", ...)
- *   apiPost("/api/auth/register", ...)
- */
 function buildUrl(path: string) {
-  // Ensures you don't accidentally pass "auth/login" and get a broken URL
   if (!path.startsWith("/")) path = "/" + path;
   return `${API_BASE_URL}${path}`;
 }
@@ -27,7 +19,6 @@ function buildUrl(path: string) {
 async function parseResponse(res: Response) {
   const text = await res.text();
   if (!text) return {};
-
   try {
     return JSON.parse(text);
   } catch {
@@ -35,16 +26,39 @@ async function parseResponse(res: Response) {
   }
 }
 
+async function getToken(passedToken?: string) {
+  if (passedToken) return passedToken;
+  return (await AsyncStorage.getItem("token")) || undefined;
+}
+
+// ✅ IMPORTANT: normalize token to avoid "Bearer Bearer xxx" or quotes
+function normalizeToken(t?: string) {
+  if (!t) return undefined;
+
+  let token = String(t).trim();
+
+  // Remove surrounding quotes if accidentally saved like "xxxx"
+  token = token.replace(/^"+|"+$/g, "");
+
+  // Remove "Bearer " if it already exists
+  token = token.replace(/^Bearer\s+/i, "");
+
+  token = token.trim();
+  return token.length > 0 ? token : undefined;
+}
+
 export async function apiPost<T>(
   path: string,
   body: unknown,
   token?: string
 ): Promise<T> {
+  const finalToken = normalizeToken(await getToken(token));
+
   const res = await fetch(buildUrl(path), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -59,10 +73,12 @@ export async function apiPost<T>(
 }
 
 export async function apiGet<T>(path: string, token?: string): Promise<T> {
+  const finalToken = normalizeToken(await getToken(token));
+
   const res = await fetch(buildUrl(path), {
     method: "GET",
     headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
     },
   });
 

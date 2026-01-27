@@ -122,7 +122,7 @@ adminRouter.get(
   }
 );
 
-// ✅ ADMIN: Approve/Reject enrollment request
+// ✅ ADMIN: Approve/Reject enrollment request (creates notification ✅)
 adminRouter.post(
   "/enrollments/:enrollmentId/decision",
   authMiddleware,
@@ -151,6 +151,18 @@ adminRouter.post(
 
       const newStatus = decision === "APPROVE" ? "APPROVED" : "REJECTED";
 
+      // ✅ Get details for notification (student + sport name)
+      const [detailRows] = await pool.query(
+        `
+        SELECT se.student_user_id, s.name AS sport_name
+        FROM sport_enrollments se
+        JOIN sports s ON s.id = se.sport_id
+        WHERE se.id = ?
+        LIMIT 1
+        `,
+        [enrollmentId]
+      );
+
       await pool.query(
         `
         UPDATE sport_enrollments
@@ -160,6 +172,24 @@ adminRouter.post(
         [newStatus, req.user.id, note || null, enrollmentId]
       );
 
+      // ✅ Insert notification
+      if (detailRows.length > 0) {
+        const studentUserId = detailRows[0].student_user_id;
+        const sportName = detailRows[0].sport_name;
+
+        await pool.query(
+          `
+          INSERT INTO notifications (user_id, title, message, type)
+          VALUES (?, ?, ?, 'ENROLLMENT')
+          `,
+          [
+            studentUserId,
+            `Sport Enrollment ${newStatus}`,
+            `Your request to join ${sportName} was ${newStatus}.`,
+          ]
+        );
+      }
+
       return res.json({ message: `Enrollment ${newStatus}` });
     } catch (err) {
       console.error("ENROLLMENT DECISION ERROR:", err);
@@ -168,7 +198,7 @@ adminRouter.post(
   }
 );
 
-// ✅ Create advisory account (ADMIN only)
+// ✅ Create advisory account (ADMIN sets password)
 adminRouter.post(
   "/create-advisory",
   authMiddleware,
@@ -177,9 +207,14 @@ adminRouter.post(
     try {
       const fullName = String(req.body?.fullName || "").trim();
       const email = String(req.body?.email || "").trim().toLowerCase();
+      const password = String(req.body?.password || "");
 
-      if (!fullName || !email) {
-        return res.status(400).json({ message: "fullName and email are required" });
+      if (!fullName || !email || !password) {
+        return res.status(400).json({ message: "fullName, email, password are required" });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
       }
 
       // ✅ Enforce advisory email domain
@@ -194,9 +229,7 @@ adminRouter.post(
         return res.status(409).json({ message: "Email already registered" });
       }
 
-      const tempPassword = "Adv@" + Math.random().toString(36).slice(2, 10);
-      const passwordHash = await bcrypt.hash(tempPassword, 12);
-
+      const passwordHash = await bcrypt.hash(password, 12);
       const role = "ADVISORY";
 
       const [result] = await pool.query(
@@ -207,7 +240,6 @@ adminRouter.post(
 
       return res.status(201).json({
         message: "Advisory account created",
-        tempPassword,
         user: {
           id: result.insertId,
           role,

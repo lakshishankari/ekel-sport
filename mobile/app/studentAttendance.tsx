@@ -1,7 +1,9 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { router } from "expo-router";
 import { loadAuth } from "../lib/authStore";
+import Screen from "../components/Screen";
+import AppHeader from "../components/AppHeader";
 
 export default function StudentAttendance() {
   useEffect(() => {
@@ -12,28 +14,54 @@ export default function StudentAttendance() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Attendance</Text>
-      <Text style={styles.sub}>Coming in Phase 2 (QR Attendance)</Text>
+    <Screen>
+      <AppHeader title="My Attendance" subtitle="View your attendance history" />
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Planned Features</Text>
-        <Text style={styles.cardText}>• QR code scan to mark attendance</Text>
-        <Text style={styles.cardText}>• View attendance percentage</Text>
-        <Text style={styles.cardText}>• Session history</Text>
-      </View>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>Coming in Phase 2</Text>
+          <Text style={styles.infoText}>QR Attendance System</Text>
+        </View>
 
-      <TouchableOpacity style={styles.btn} onPress={() => router.back()}>
-        <Text style={styles.btnText}>Back</Text>
-      </TouchableOpacity>
-    </View>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Planned Features</Text>
+          <Text style={styles.cardText}>• QR code scan to mark attendance</Text>
+          <Text style={styles.cardText}>• View attendance percentage</Text>
+          <Text style={styles.cardText}>• Session history</Text>
+          <Text style={styles.cardText}>• Attendance statistics per sport</Text>
+        </View>
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B0F14", padding: 20, justifyContent: "center" },
-  title: { color: "white", fontSize: 26, fontWeight: "900", textAlign: "center" },
-  sub: { color: "#A7B0BE", textAlign: "center", marginTop: 6, marginBottom: 18 },
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  infoCard: {
+    backgroundColor: "rgba(201,162,39,0.1)",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.3)",
+    alignItems: "center",
+  },
+  infoTitle: {
+    color: "#C9A227",
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  infoText: {
+    color: "#A7B0BE",
+    fontSize: 14,
+  },
   card: {
     backgroundColor: "#121826",
     borderRadius: 14,
@@ -41,8 +69,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#263041",
   },
-  cardTitle: { color: "white", fontSize: 18, fontWeight: "900", marginBottom: 10 },
-  cardText: { color: "#A7B0BE", marginTop: 6 },
-  btn: { marginTop: 18, alignSelf: "center" },
-  btnText: { color: "#A7B0BE", textDecorationLine: "underline", fontWeight: "800" },
+  cardTitle: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  cardText: {
+    color: "#A7B0BE",
+    marginTop: 6,
+    fontSize: 14,
+  },
 });

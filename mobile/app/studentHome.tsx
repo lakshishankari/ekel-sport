@@ -60,23 +60,80 @@ export default function StudentHome() {
 
       {/* Main actions (Phase 1) */}
       <TouchableOpacity style={styles.card} onPress={() => router.push("/mySports")}>
-        <Text style={styles.cardText}>My Sports</Text>
-        <Text style={styles.cardSub}>Approved sports & WhatsApp links</Text>
+        <View style={styles.cardIcon}>
+          <Ionicons name="medal-outline" size={24} color="#C9A227" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardText}>My Sports</Text>
+          <Text style={styles.cardSub}>Approved sports & WhatsApp links</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.card} onPress={() => router.push("/studentSports")}>
-        <Text style={styles.cardText}>Sports & Enrollment</Text>
-        <Text style={styles.cardSub}>Browse sports & request enrollment</Text>
+        <View style={styles.cardIcon}>
+          <Ionicons name="basketball-outline" size={24} color="#C9A227" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardText}>Sports & Enrollment</Text>
+          <Text style={styles.cardSub}>Browse sports & request enrollment</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/studentScanAttendance" as any)}>
+        <View style={styles.cardIcon}>
+          <Ionicons name="qr-code-outline" size={24} color="#C9A227" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardText}>Scan Attendance</Text>
+          <Text style={styles.cardSub}>Mark your attendance with QR</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/studentAttendance" as any)}>
+        <View style={styles.cardIcon}>
+          <Ionicons name="calendar-outline" size={24} color="#C9A227" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardText}>My Attendance</Text>
+          <Text style={styles.cardSub}>View attendance history</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/studentPerformance" as any)}>
+        <View style={styles.cardIcon}>
+          <Ionicons name="trophy-outline" size={24} color="#C9A227" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardText}>My Performance</Text>
+          <Text style={styles.cardSub}>View scores & achievements</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.card} onPress={() => router.push("/studentProfile")}>
-        <Text style={styles.cardText}>My Profile</Text>
-        <Text style={styles.cardSub}>Edit bio, faculty, degree, achievements</Text>
+        <View style={styles.cardIcon}>
+          <Ionicons name="person-outline" size={24} color="#C9A227" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardText}>My Profile</Text>
+          <Text style={styles.cardSub}>Edit bio, faculty, degree, achievements</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.card} onPress={() => router.push("/help")}>
-        <Text style={styles.cardText}>Help & Support</Text>
-        <Text style={styles.cardSub}>Contact admin / guidelines</Text>
+        <View style={styles.cardIcon}>
+          <Ionicons name="help-circle-outline" size={24} color="#C9A227" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardText}>Help & Support</Text>
+          <Text style={styles.cardSub}>Contact admin / guidelines</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
       </TouchableOpacity>
 
       {/* Optional quick link */}
@@ -137,9 +194,23 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: "#263041",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  cardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "rgba(201,162,39,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardContent: {
+    flex: 1,
   },
   cardText: { color: "white", fontSize: 16, fontWeight: "900" },
-  cardSub: { color: "#A7B0BE", marginTop: 6, fontSize: 13 },
+  cardSub: { color: "#A7B0BE", marginTop: 4, fontSize: 13 },
 
   link: { color: "#A7B0BE", textDecorationLine: "underline", textAlign: "center" },
 

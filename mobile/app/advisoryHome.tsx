@@ -17,13 +17,13 @@ export default function AdvisoryHome() {
   }, []);
 
   const goReports = () => router.push("/reports");
-  const goWeightages = () => router.push("/advisoryWeightages");
+  const goWeightages = () => router.push("/advisoryWeightages"); // Main Dashboard
   const goAdvisoryModule = () => router.push("/advisoryDashboard"); // Phase 2 UI page (your existing file)
 
   return (
     <Screen>
       <AppHeader
-        title="Advisory Dashboard"
+        title="Advisory Board"
         subtitle="Manage colours criteria and review analytics."
         showBack={false}
       />
@@ -31,38 +31,38 @@ export default function AdvisoryHome() {
       <AppCard style={{ marginBottom: 14 }}>
         <Text style={styles.cardTitle}>Overview</Text>
         <Text style={styles.cardSub}>
-          Weightages are configured per sport. Performance review and eligibility decisions will be connected in Phase 2.
+          Monitor student eligibility and manage colours criteria weightages
         </Text>
 
         <View style={styles.kpiRow}>
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>Criteria</Text>
-            <Text style={styles.kpiValue}>4</Text>
+            <Text style={styles.kpiLabel}>Students Reviewed</Text>
+            <Text style={styles.kpiValue}>45</Text>
           </View>
 
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>Total Weight</Text>
-            <Text style={styles.kpiValue}>100%</Text>
+            <Text style={styles.kpiLabel}>Eligible</Text>
+            <Text style={[styles.kpiValue, { color: "#10B981" }]}>32</Text>
           </View>
 
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>Mode</Text>
-            <Text style={styles.kpiValue}>Demo</Text>
+            <Text style={styles.kpiLabel}>Pending Decision</Text>
+            <Text style={[styles.kpiValue, { color: "#C9A227" }]}>8</Text>
           </View>
         </View>
       </AppCard>
 
       <AppCard style={{ marginBottom: 14 }}>
-        <Text style={styles.cardTitle}>Actions</Text>
+        <Text style={styles.cardTitle}>Quick Actions</Text>
 
         <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.85 }]} onPress={goWeightages}>
-          <Text style={styles.actionTitle}>Manage Weightages</Text>
-          <Text style={styles.actionSub}>Set criteria weights per sport (must total 100%)</Text>
+          <Text style={styles.actionTitle}>Dashboard & Weightages</Text>
+          <Text style={styles.actionSub}>Manage criteria weights and view student performance</Text>
         </Pressable>
 
         <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.85 }]} onPress={goAdvisoryModule}>
-          <Text style={styles.actionTitle}>Open Advisory Module</Text>
-          <Text style={styles.actionSub}>Phase 2 UI (eligibility workflow)</Text>
+          <Text style={styles.actionTitle}>Eligibility Review</Text>
+          <Text style={styles.actionSub}>Review and approve student colours eligibility</Text>
         </Pressable>
 
         <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.85 }]} onPress={goReports}>

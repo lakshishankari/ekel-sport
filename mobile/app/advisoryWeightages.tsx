@@ -153,9 +153,9 @@ export default function AdvisoryWeightages() {
           <Ionicons name="chevron-back" size={24} color="#F9FAFB" />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Manage Weightages</Text>
+          <Text style={styles.headerTitle}>Advisory Board</Text>
           <Text style={styles.headerSubtitle}>
-            Review performance data and set weightages for colours eligibility
+            Manage weightages and review student performance
           </Text>
         </View>
       </View>
@@ -434,6 +434,68 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 4,
     lineHeight: 18,
+  },
+  overviewSection: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    backgroundColor: "rgba(18, 24, 38, 0.6)",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  overviewTitle: {
+    color: "#F9FAFB",
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  kpiRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  kpiBox: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+  },
+  kpiLabel: {
+    color: "rgba(229,231,235,0.6)",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  kpiValue: {
+    color: "#F9FAFB",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  quickActions: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 12,
+    gap: 8,
+  },
+  quickActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "rgba(201,162,39,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.3)",
+  },
+  quickActionText: {
+    color: "#C9A227",
+    fontSize: 13,
+    fontWeight: "800",
   },
   tabContainer: {
     flexDirection: "row",

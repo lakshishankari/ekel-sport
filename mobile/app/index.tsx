@@ -13,7 +13,7 @@ export default function IndexScreen() {
       if (token && role) {
         if (role === "STUDENT") router.replace("/studentHome" as Href);
         else if (role === "ADMIN") router.replace("/adminHome" as Href);
-        else router.replace("/advisoryHome" as Href);
+        else router.replace("/advisoryWeightages" as Href);
       }
     })();
   }, []);

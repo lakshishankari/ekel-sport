@@ -1,0 +1,29 @@
+=== USERS TABLE CREATE ===
+CREATE TABLE `users` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `role` enum('STUDENT','ADMIN','ADVISORY') NOT NULL,
+  `student_id` varchar(50) DEFAULT NULL,
+  `full_name` varchar(100) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `student_no` varchar(20) DEFAULT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_users_email` (`email`),
+  UNIQUE KEY `uq_users_student_id` (`student_id`),
+  KEY `idx_users_student_no` (`student_no`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+=== SPORTS TABLE CREATE ===
+CREATE TABLE `sports` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `venue` varchar(150) DEFAULT NULL,
+  `schedule_text` varchar(255) DEFAULT NULL,
+  `instructor_name` varchar(100) DEFAULT NULL,
+  `instructor_email` varchar(100) DEFAULT NULL,
+  `whatsapp_link` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci

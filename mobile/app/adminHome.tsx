@@ -19,7 +19,7 @@ export default function AdminHome() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "#0B0F14" }} contentContainerStyle={styles.container}>
       <Text style={styles.title}>Admin Dashboard</Text>
-      <Text style={styles.sub}>Manage sports, enrollments, squad/pool, events and reports</Text>
+      <Text style={styles.sub}>Manage sports, enrollments, squad/pool, and announcements</Text>
 
       <TouchableOpacity style={styles.card} onPress={() => router.push("/adminUsers")}>
         <Text style={styles.cardText}>Users</Text>
@@ -41,9 +41,9 @@ export default function AdminHome() {
         <Text style={styles.cardSub}>Select students into Pool/Squad (UI first)</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminEvents")}>
-        <Text style={styles.cardText}>Events</Text>
-        <Text style={styles.cardSub}>Create competitions + divisions</Text>
+      <TouchableOpacity style={styles.card} onPress={() => router.push("/adminAnnouncements")}>
+        <Text style={styles.cardText}>Announcements</Text>
+        <Text style={styles.cardSub}>Create and manage announcements</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.card} onPress={() => router.push("/adminAddMarks")}>
@@ -51,11 +51,7 @@ export default function AdminHome() {
         <Text style={styles.cardSub}>Add fitness/discipline/match scores</Text>
       </TouchableOpacity>
 
-      {/* ✅ Shared screen: Admin + Advisory */}
-      <TouchableOpacity style={styles.card} onPress={() => router.push("/reports")}>
-        <Text style={styles.cardText}>Reports & Analytics</Text>
-        <Text style={styles.cardSub}>Enrollments, attendance, performance (Phase 2)</Text>
-      </TouchableOpacity>
+
 
       <TouchableOpacity style={styles.card} onPress={() => router.push("/createAdvisory")}>
         <Text style={styles.cardText}>Create Advisory</Text>

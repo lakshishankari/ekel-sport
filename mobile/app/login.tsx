@@ -47,7 +47,7 @@ export default function LoginScreen() {
 
       if (data.user.role === "STUDENT") router.replace("/studentHome" as Href);
       else if (data.user.role === "ADMIN") router.replace("/adminHome" as Href);
-      else router.replace("/advisoryHome" as Href);
+      else router.replace("/advisoryWeightages" as Href);
     } catch (e: any) {
       Alert.alert("Login failed", e?.message || "Something went wrong");
     } finally {

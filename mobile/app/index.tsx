@@ -11,6 +11,7 @@ export default function IndexScreen() {
       const { token, role } = await loadAuth();
 
       if (token && role) {
+        // On initial load, just redirect - no navigation stack to clear
         if (role === "STUDENT") router.replace("/studentHome" as Href);
         else if (role === "ADMIN") router.replace("/adminHome" as Href);
         else router.replace("/advisoryWeightages" as Href);

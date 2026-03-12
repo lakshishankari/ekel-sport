@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Screen from "../components/Screen";
+import { loadAuth } from "../lib/authStore";
 
 type Weightage = {
   id: string;
@@ -32,6 +33,16 @@ export default function AdvisoryWeightages() {
   const [activeTab, setActiveTab] = useState<"criteria" | "colors">("criteria");
   const [selectedSport, setSelectedSport] = useState("Cricket");
   const [loading, setLoading] = useState(false);
+
+  // Auth protection
+  useEffect(() => {
+    (async () => {
+      const { token, role } = await loadAuth();
+      if (!token || role !== "ADVISORY") {
+        router.replace("/login");
+      }
+    })();
+  }, []);
 
   // Mock data - each sport has 4 criteria that must total 100%
   const [weightages, setWeightages] = useState<SportWeightages[]>([

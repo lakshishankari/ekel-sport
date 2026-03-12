@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "./config";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadAuth } from "./authStore";
 
 export type UserRole = "STUDENT" | "ADMIN" | "ADVISORY";
 
@@ -28,7 +28,8 @@ async function parseResponse(res: Response) {
 
 async function getToken(passedToken?: string) {
   if (passedToken) return passedToken;
-  return (await AsyncStorage.getItem("token")) || undefined;
+  const { token } = await loadAuth();
+  return token || undefined;
 }
 
 // ✅ IMPORTANT: normalize token to avoid "Bearer Bearer xxx" or quotes

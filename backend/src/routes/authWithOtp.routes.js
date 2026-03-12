@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Helper functions
 function isStudentEmail(email) {
-    const studentEmailRegex = /^[a-zA-Z0-9._-]+-im\d+@stu\.kln\.ac\.lk$/;
+    const studentEmailRegex = /^[a-zA-Z0-9._-]+-[a-z]{2,}\d+@stu\.kln\.ac\.lk$/;
     return studentEmailRegex.test(String(email || "").trim().toLowerCase());
 }
 

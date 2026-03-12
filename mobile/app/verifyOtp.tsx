@@ -6,8 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Screen from "../components/Screen";
 import AppHeader from "../components/AppHeader";
 import AppCard from "../components/AppCard";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || "http://192.168.1.7:5000";
+import { API_BASE_URL } from "../lib/config";
 
 export default function VerifyOtp() {
   const params = useLocalSearchParams();
@@ -22,7 +21,7 @@ export default function VerifyOtp() {
 
     setLoading(true);
     try {
-      const url = `${API_BASE}/auth/verify-otp`;
+      const url = `${API_BASE_URL}/auth/verify-otp`;
       console.log("📱 Verifying OTP:", url, "email:", email);
 
       const res = await fetch(url, {

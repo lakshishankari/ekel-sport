@@ -7,12 +7,26 @@ export default function AdminHome() {
   useEffect(() => {
     (async () => {
       const { token, role } = await loadAuth();
-      if (!token || role !== "ADMIN") router.replace("/login");
+      if (!token || role !== "ADMIN") {
+        router.replace("/login");
+      }
     })();
   }, []);
 
   async function onLogout() {
     await clearAuth();
+
+    // Safely clear navigation stack
+    try {
+      let iterations = 0;
+      while (router.canGoBack() && iterations < 20) {
+        router.back();
+        iterations++;
+      }
+    } catch (e) {
+      // Ignore navigation errors
+    }
+
     router.replace("/login");
   }
 

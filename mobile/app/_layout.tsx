@@ -1,6 +1,27 @@
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
+import { useEffect } from "react";
+import { BackHandler } from "react-native";
 
 export default function RootLayout() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    // Role home screens where back button should be blocked
+    const homeRoutes = ["/studentHome", "/adminHome", "/advisoryHome", "/advisoryWeightages"];
+
+    // Block hardware back button on home screens to prevent unauthorized navigation
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (homeRoutes.includes(pathname)) {
+        // Prevent going back from home screen - consume the event
+        return true;
+      }
+      // Allow default back behavior for other screens
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [pathname]);
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
@@ -9,6 +30,7 @@ export default function RootLayout() {
 
       <Stack.Screen name="forgotPassword" />
       <Stack.Screen name="verifyOtp" />
+      <Stack.Screen name="verifyRegistrationOtp" />
       <Stack.Screen name="resetPassword" />
 
 

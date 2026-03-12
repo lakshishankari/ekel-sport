@@ -1,13 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { Text, StyleSheet, TextInput, Pressable, Alert } from "react-native";
+import { Text, StyleSheet, TextInput, Pressable, Alert, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Screen from "../components/Screen";
 import AppHeader from "../components/AppHeader";
 import AppCard from "../components/AppCard";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || "http://192.168.1.7:5000";
+import { API_BASE_URL } from "../lib/config";
 
 export default function ResetPassword() {
   const params = useLocalSearchParams();
@@ -27,7 +26,7 @@ export default function ResetPassword() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/reset-password`, {
+      const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, reset_token: resetToken, new_password: pw1 }),

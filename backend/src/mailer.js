@@ -11,13 +11,18 @@ function getTransporter() {
 }
 
 async function sendEmail(to, subject, text) {
-  const transporter = getTransporter();
-  await transporter.sendMail({
-    from: process.env.SMTP_USER,
-    to,
-    subject,
-    text
-  });
+  try {
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to,
+      subject,
+      text
+    });
+  } catch (err) {
+    console.error("sendEmail failed:", err);
+    throw err;
+  }
 }
 
 module.exports = { sendEmail };

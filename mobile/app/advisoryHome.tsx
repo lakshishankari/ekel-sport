@@ -12,7 +12,9 @@ export default function AdvisoryHome() {
   useEffect(() => {
     (async () => {
       const { token, role } = await loadAuth();
-      if (!token || role !== "ADVISORY") router.replace("/login");
+      if (!token || role !== "ADVISORY") {
+        router.replace("/login");
+      }
     })();
   }, []);
 

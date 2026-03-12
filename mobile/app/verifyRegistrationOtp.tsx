@@ -2,13 +2,12 @@ import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, Alert, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import Screen from "../components/Screen";
 import AppHeader from "../components/AppHeader";
 import AppCard from "../components/AppCard";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || "http://192.168.1.7:5000";
+import { API_BASE_URL } from "../lib/config";
+import { saveAuth } from "../lib/authStore";
 
 export default function VerifyRegistrationOtp() {
     const params = useLocalSearchParams();
@@ -31,7 +30,7 @@ export default function VerifyRegistrationOtp() {
 
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/auth-otp/verify-and-register`, {
+            const res = await fetch(`${API_BASE_URL}/api/auth-otp/verify-and-register`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -46,12 +45,9 @@ export default function VerifyRegistrationOtp() {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data?.message || "Verification failed");
 
-            // Save token and user data
-            if (data.token) {
-                await AsyncStorage.setItem("token", data.token);
-                if (data.user) {
-                    await AsyncStorage.setItem("user", JSON.stringify(data.user));
-                }
+            // Save token and user data using authStore for consistency
+            if (data.token && data.user) {
+                await saveAuth(data.token, data.user.role);
             }
 
             Alert.alert("Success! 🎉", "Your account has been created successfully!", [
@@ -73,7 +69,7 @@ export default function VerifyRegistrationOtp() {
     const resendOtp = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/api/auth-otp/send-registration-otp`, {
+            const res = await fetch(`${API_BASE_URL}/api/auth-otp/send-registration-otp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ studentId, fullName, email, password }),

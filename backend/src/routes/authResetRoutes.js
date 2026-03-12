@@ -1,22 +1,14 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
+const { sendEmail } = require("../mailer");
+const { pool } = require("../db");
 
 const router = express.Router();
-
-// Import the database pool from the correct path
-const { pool } = require("../db");
 
 const OTP_EXP_MINUTES = Number(process.env.OTP_EXP_MINUTES || 10);
 const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || "reset_secret";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: false,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-});
 
 function genOtp6() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -46,12 +38,11 @@ router.post("/forgot-password", async (req, res) => {
       [user.id, otpHash, expiresStr]
     );
 
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: email,
-      subject: "EKEL Sport - Password Reset OTP",
-      text: `Your OTP is: ${otp}\nThis OTP expires in ${OTP_EXP_MINUTES} minutes.`,
-    });
+    await sendEmail(
+      email,
+      "EKEL Sport - Password Reset OTP",
+      `Your OTP is: ${otp}\nThis OTP expires in ${OTP_EXP_MINUTES} minutes.`
+    );
 
     return res.json({ message: "OTP sent" });
   } catch (e) {

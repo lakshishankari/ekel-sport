@@ -45,6 +45,17 @@ export default function LoginScreen() {
 
       await saveAuth(data.token, data.user.role);
 
+      // Safely clear navigation stack
+      try {
+        let iterations = 0;
+        while (router.canGoBack() && iterations < 20) {
+          router.back();
+          iterations++;
+        }
+      } catch (e) {
+        // Ignore navigation errors
+      }
+
       if (data.user.role === "STUDENT") router.replace("/studentHome" as Href);
       else if (data.user.role === "ADMIN") router.replace("/adminHome" as Href);
       else router.replace("/advisoryWeightages" as Href);

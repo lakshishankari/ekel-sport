@@ -48,6 +48,7 @@ export default function RootLayout() {
       {/* Student */}
       <Stack.Screen name="studentSports" />
       <Stack.Screen name="mySports" />
+      <Stack.Screen name="sportSchedule" />
       <Stack.Screen name="studentNotifications" />
       <Stack.Screen name="studentProfile" />
       <Stack.Screen name="studentAttendance" />

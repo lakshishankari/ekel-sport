@@ -12,6 +12,8 @@ import {
 import { router } from "expo-router";
 import { apiGet, apiPost } from "../lib/api";
 import { loadAuth } from "../lib/authStore";
+import Screen from "../components/Screen";
+import AppHeader from "../components/AppHeader";
 
 type Sport = {
   id: number;
@@ -91,9 +93,8 @@ export default function AdminSports() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Manage Sports</Text>
-
+    <Screen>
+      <AppHeader title="Manage Sports" subtitle="Add sports and view existing ones" />
       <View style={styles.form}>
         <TextInput
           style={styles.input}
@@ -165,18 +166,13 @@ export default function AdminSports() {
           )}
         />
       )}
-
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0B0F14", padding: 20 },
-  title: { color: "white", fontSize: 26, fontWeight: "900", textAlign: "center", marginBottom: 12 },
-  form: { backgroundColor: "#121826", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#263041" },
+  form: { backgroundColor: "#121826", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#263041", marginBottom: 12 },
   input: {
     borderWidth: 1,
     borderColor: "#263041",
@@ -188,10 +184,8 @@ const styles = StyleSheet.create({
   },
   btn: { backgroundColor: "#D4AF37", padding: 14, borderRadius: 12, alignItems: "center" },
   btnText: { fontWeight: "800", fontSize: 16, color: "#111827" },
-  section: { color: "white", fontSize: 16, fontWeight: "800", marginTop: 16, marginBottom: 10 },
+  section: { color: "white", fontSize: 16, fontWeight: "800", marginTop: 4, marginBottom: 10 },
   card: { backgroundColor: "#121826", borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: "#263041" },
   cardTitle: { color: "white", fontSize: 16, fontWeight: "800" },
   cardText: { color: "#A7B0BE", marginTop: 4 },
-  backBtn: { alignSelf: "center", marginTop: 10 },
-  backText: { color: "#A7B0BE", textDecorationLine: "underline" },
 });

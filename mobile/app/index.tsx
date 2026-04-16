@@ -11,10 +11,10 @@ export default function IndexScreen() {
       const { token, role } = await loadAuth();
 
       if (token && role) {
-        // On initial load, just redirect - no navigation stack to clear
+        // On initial load, redirect to the correct home screen per role
         if (role === "STUDENT") router.replace("/studentHome" as Href);
         else if (role === "ADMIN") router.replace("/adminHome" as Href);
-        else router.replace("/advisoryWeightages" as Href);
+        else router.replace("/advisoryHome" as Href);
       }
     })();
   }, []);

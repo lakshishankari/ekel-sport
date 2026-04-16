@@ -12,6 +12,8 @@ import {
 import { router } from "expo-router";
 import { apiGet, apiPost } from "../lib/api";
 import { loadAuth } from "../lib/authStore";
+import Screen from "../components/Screen";
+import AppHeader from "../components/AppHeader";
 
 type EnrollmentStatus = "NOT_REQUESTED" | "PENDING" | "APPROVED" | "REJECTED";
 
@@ -113,9 +115,8 @@ export default function StudentSports() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Sports</Text>
-      <Text style={styles.sub}>Request enrollment to join a sport (Admin must approve)</Text>
+    <Screen>
+      <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" />
 
       {loading ? (
         <ActivityIndicator />
@@ -195,18 +196,12 @@ export default function StudentSports() {
           }
         />
       )}
-
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0B0F14", padding: 20 },
-  title: { color: "white", fontSize: 26, fontWeight: "900", textAlign: "center" },
-  sub: { color: "#A7B0BE", textAlign: "center", marginTop: 6, marginBottom: 14 },
 
   card: {
     backgroundColor: "#121826",
@@ -243,7 +238,4 @@ const styles = StyleSheet.create({
 
   btnText: { fontWeight: "900", color: "#111827" },
   smallNote: { color: "#A7B0BE", marginTop: 10, fontSize: 12 },
-
-  backBtn: { alignSelf: "center", marginTop: 10 },
-  backText: { color: "#A7B0BE", textDecorationLine: "underline" },
 });

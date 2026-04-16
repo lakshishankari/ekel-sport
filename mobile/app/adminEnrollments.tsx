@@ -11,6 +11,8 @@ import {
 import { router } from "expo-router";
 import { apiGet, apiPost } from "../lib/api";
 import { loadAuth } from "../lib/authStore";
+import Screen from "../components/Screen";
+import AppHeader from "../components/AppHeader";
 
 type PendingEnrollment = {
   enrollment_id: number;
@@ -71,9 +73,8 @@ export default function AdminEnrollments() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Enrollment Requests</Text>
-      <Text style={styles.sub}>Approve or reject student sport enrollments</Text>
+    <Screen>
+      <AppHeader title="Enrollments" subtitle="Approve or reject student requests" />
 
       {loading ? (
         <ActivityIndicator />
@@ -121,18 +122,12 @@ export default function AdminEnrollments() {
           }
         />
       )}
-
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0B0F14", padding: 20 },
-  title: { color: "white", fontSize: 26, fontWeight: "900", textAlign: "center" },
-  sub: { color: "#A7B0BE", textAlign: "center", marginTop: 6, marginBottom: 14 },
 
   card: {
     backgroundColor: "#121826",
@@ -150,7 +145,4 @@ const styles = StyleSheet.create({
   approveBtn: { backgroundColor: "#D4AF37" },
   rejectBtn: { backgroundColor: "#2C3442" },
   btnText: { fontWeight: "900", color: "#111827" },
-
-  backBtn: { alignSelf: "center", marginTop: 10 },
-  backText: { color: "#A7B0BE", textDecorationLine: "underline" },
 });

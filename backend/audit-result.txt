@@ -1,0 +1,190 @@
+EKEL-SPORT DATABASE FULL AUDIT
+============================================================
+
+DB CONNECTION: OK
+
+TABLES IN DATABASE:
+  - announcements
+  - attendance
+  - attendance_sessions
+  - event_divisions
+  - event_results
+  - event_team_members
+  - events
+  - notifications
+  - otp_codes
+  - password_reset_otps
+  - performance_entries
+  - sport_criteria_weightages
+  - sport_enrollments
+  - sport_roles
+  - sports
+  - student_profiles
+  - student_team_assignment
+  - users
+  - weightage_profiles
+
+REQUIRED TABLE CHECK:
+  [OK]      users
+  [OK]      sports
+  [OK]      sport_enrollments
+  [OK]      otp_codes
+  [OK]      password_reset_otps
+  [OK]      notifications
+  [OK]      attendance
+
+TABLE: users
+------------------------------------------------------------------------------------------
+  Field                        | Type                     | Null | Key   | Default
+  -------------------------------------------------------------------------------------
+  id                           | bigint unsigned          | NO   | PK    | NULL
+  role                         | enum('STUDENT','ADMIN','ADVISORY') | NO   |       | NULL
+  student_id                   | varchar(50)              | YES  | UNI   | NULL
+  full_name                    | varchar(100)             | NO   |       | NULL
+  email                        | varchar(255)             | NO   | UNI   | NULL
+  student_no                   | varchar(20)              | YES  | FK/IDX | NULL
+  password_hash                | varchar(255)             | NO   |       | NULL
+  created_at                   | timestamp                | NO   |       | CURRENT_TIMESTAMP
+  >> All required columns present
+
+TABLE: sports
+------------------------------------------------------------------------------------------
+  Field                        | Type                     | Null | Key   | Default
+  -------------------------------------------------------------------------------------
+  id                           | int unsigned             | NO   | PK    | NULL
+  name                         | varchar(100)             | NO   | UNI   | NULL
+  venue                        | varchar(150)             | YES  |       | NULL
+  schedule_text                | varchar(255)             | YES  |       | NULL
+  instructor_name              | varchar(100)             | YES  |       | NULL
+  instructor_email             | varchar(100)             | YES  |       | NULL
+  whatsapp_link                | varchar(255)             | YES  |       | NULL
+  created_at                   | timestamp                | YES  |       | CURRENT_TIMESTAMP
+  >> All required columns present
+
+TABLE: sport_enrollments
+------------------------------------------------------------------------------------------
+  Field                        | Type                     | Null | Key   | Default
+  -------------------------------------------------------------------------------------
+  id                           | bigint unsigned          | NO   | PK    | NULL
+  sport_id                     | int unsigned             | NO   | FK/IDX | NULL
+  student_user_id              | bigint unsigned          | NO   | FK/IDX | NULL
+  status                       | enum('PENDING','APPROVED','REJECTED') | YES  |       | PENDING
+  requested_at                 | timestamp                | YES  |       | CURRENT_TIMESTAMP
+  decided_at                   | timestamp                | YES  |       | NULL
+  decided_by_admin_id          | bigint unsigned          | YES  | FK/IDX | NULL
+  decision_note                | varchar(255)             | YES  |       | NULL
+  squad_level                  | enum('NONE','POOL','SQUAD') | NO   |       | NONE
+  >> All required columns present
+
+TABLE: otp_codes
+------------------------------------------------------------------------------------------
+  Field                        | Type                     | Null | Key   | Default
+  -------------------------------------------------------------------------------------
+  id                           | bigint unsigned          | NO   | PK    | NULL
+  email                        | varchar(255)             | NO   | FK/IDX | NULL
+  purpose                      | enum('REGISTER','RESET_PASSWORD') | NO   |       | NULL
+  otp_hash                     | varchar(255)             | NO   |       | NULL
+  expires_at                   | datetime                 | NO   | FK/IDX | NULL
+  used_at                      | datetime                 | YES  |       | NULL
+  attempts                     | int                      | NO   |       | 0
+  created_at                   | timestamp                | NO   |       | CURRENT_TIMESTAMP
+  >> All required columns present
+
+TABLE: password_reset_otps
+------------------------------------------------------------------------------------------
+  Field                        | Type                     | Null | Key   | Default
+  -------------------------------------------------------------------------------------
+  id                           | bigint unsigned          | NO   | PK    | NULL
+  user_id                      | bigint unsigned          | NO   | FK/IDX | NULL
+  otp_hash                     | varchar(255)             | NO   |       | NULL
+  expires_at                   | datetime                 | NO   | FK/IDX | NULL
+  attempts                     | int                      | NO   |       | 0
+  used_at                      | datetime                 | YES  |       | NULL
+  created_at                   | timestamp                | YES  |       | CURRENT_TIMESTAMP
+  >> All required columns present
+
+TABLE: notifications
+------------------------------------------------------------------------------------------
+  Field                        | Type                     | Null | Key   | Default
+  -------------------------------------------------------------------------------------
+  id                           | bigint unsigned          | NO   | PK    | NULL
+  user_id                      | bigint unsigned          | NO   | FK/IDX | NULL
+  title                        | varchar(120)             | NO   |       | NULL
+  message                      | varchar(500)             | NO   |       | NULL
+  type                         | enum('ENROLLMENT','SYSTEM') | NO   |       | SYSTEM
+  is_read                      | tinyint(1)               | NO   |       | 0
+  created_at                   | timestamp                | YES  |       | CURRENT_TIMESTAMP
+  >> All required columns present
+
+TABLE: attendance
+------------------------------------------------------------------------------------------
+  Field                        | Type                     | Null | Key   | Default
+  -------------------------------------------------------------------------------------
+  id                           | bigint unsigned          | NO   | PK    | NULL
+  student_user_id              | bigint unsigned          | NO   | FK/IDX | NULL
+  sport_id                     | int unsigned             | NO   | FK/IDX | NULL
+  session_id                   | bigint unsigned          | YES  | FK/IDX | NULL
+  session_date                 | date                     | NO   | FK/IDX | NULL
+  attended_at                  | timestamp                | YES  |       | CURRENT_TIMESTAMP
+  created_at                   | timestamp                | YES  |       | CURRENT_TIMESTAMP
+  >> All required columns present
+
+FOREIGN KEY CONSTRAINTS:
+------------------------------------------------------------
+  announcements.sport_id => sports.id  [fk_announcement_sport]
+  attendance.student_user_id => users.id  [attendance_ibfk_1]
+  attendance.sport_id => sports.id  [attendance_ibfk_2]
+  attendance.session_id => attendance_sessions.id  [fk_attendance_session]
+  attendance_sessions.sport_id => sports.id  [fk_att_sess_sport]
+  event_divisions.event_id => events.id  [event_divisions_ibfk_1]
+  event_results.event_division_id => event_divisions.id  [event_results_ibfk_1]
+  event_results.updated_by_admin_id => users.id  [event_results_ibfk_2]
+  event_team_members.event_division_id => event_divisions.id  [event_team_members_ibfk_1]
+  event_team_members.student_user_id => users.id  [event_team_members_ibfk_2]
+  events.sport_id => sports.id  [events_ibfk_1]
+  events.created_by_admin_id => users.id  [events_ibfk_2]
+  notifications.user_id => users.id  [notifications_ibfk_1]
+  password_reset_otps.user_id => users.id  [fk_pro_user]
+  performance_entries.sport_id => sports.id  [fk_perf_sport]
+  performance_entries.event_division_id => event_divisions.id  [performance_entries_ibfk_1]
+  performance_entries.student_user_id => users.id  [performance_entries_ibfk_2]
+  performance_entries.created_by_admin_id => users.id  [performance_entries_ibfk_3]
+  sport_criteria_weightages.sport_id => sports.id  [fk_scw_sport]
+  sport_criteria_weightages.updated_by_user_id => users.id  [fk_scw_user]
+  sport_enrollments.sport_id => sports.id  [sport_enrollments_ibfk_1]
+  sport_enrollments.student_user_id => users.id  [sport_enrollments_ibfk_2]
+  sport_enrollments.decided_by_admin_id => users.id  [sport_enrollments_ibfk_3]
+  sport_roles.sport_id => sports.id  [sport_roles_ibfk_1]
+  student_profiles.user_id => users.id  [student_profiles_ibfk_1]
+  student_team_assignment.sport_id => sports.id  [student_team_assignment_ibfk_1]
+  student_team_assignment.student_user_id => users.id  [student_team_assignment_ibfk_2]
+  student_team_assignment.assigned_by_admin_id => users.id  [student_team_assignment_ibfk_3]
+  weightage_profiles.sport_id => sports.id  [fk_weight_sport]
+
+ROW COUNTS:
+----------------------------------------
+  announcements                        0 rows  (empty)
+  attendance                           0 rows  (empty)
+  attendance_sessions                  0 rows  (empty)
+  event_divisions                      0 rows  (empty)
+  event_results                        0 rows  (empty)
+  event_team_members                   0 rows  (empty)
+  events                               0 rows  (empty)
+  notifications                        2 rows
+  otp_codes                           13 rows
+  password_reset_otps                 18 rows
+  performance_entries                  0 rows  (empty)
+  sport_criteria_weightages            1 rows
+  sport_enrollments                    3 rows
+  sport_roles                          0 rows  (empty)
+  sports                               1 rows
+  student_profiles                     0 rows  (empty)
+  student_team_assignment              0 rows  (empty)
+  users                                5 rows
+  weightage_profiles                   1 rows
+
+============================================================
+SUMMARY
+============================================================
+ALL REQUIRED TABLES EXIST
+Audit complete.

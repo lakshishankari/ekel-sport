@@ -254,4 +254,214 @@ adminRouter.post(
   }
 );
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SQUAD & POOL MANAGEMENT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * GET /api/admin/squad-pool/sports
+ * Returns sports that have at least one APPROVED enrollment
+ */
+adminRouter.get(
+  "/squad-pool/sports",
+  authMiddleware,
+  roleMiddleware(["ADMIN"]),
+  async (req, res) => {
+    try {
+      const [rows] = await pool.query(`
+        SELECT DISTINCT s.id, s.name
+        FROM sports s
+        INNER JOIN sport_enrollments se ON se.sport_id = s.id
+        WHERE se.status = 'APPROVED'
+        ORDER BY s.name ASC
+      `);
+      return res.json(rows);
+    } catch (err) {
+      console.error("SQUAD-POOL SPORTS ERROR:", err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/squad-pool/:sportId
+ * Returns all APPROVED students for a sport with aggregated performance stats
+ */
+adminRouter.get(
+  "/squad-pool/:sportId",
+  authMiddleware,
+  roleMiddleware(["ADMIN"]),
+  async (req, res) => {
+    try {
+      const sportId = Number(req.params.sportId);
+      if (!sportId) return res.status(400).json({ message: "Invalid sportId" });
+
+      const [rows] = await pool.query(
+        `
+        SELECT
+          u.id                          AS student_user_id,
+          u.full_name,
+          u.student_id,
+          se.squad_level,
+          COUNT(DISTINCT a.id)          AS attendance_count,
+          COUNT(DISTINCT pe.id)         AS performance_count,
+          ROUND(AVG(pe.value), 1)       AS avg_score,
+          SUM(CASE WHEN pe.type = 'MATCH'     THEN 1 ELSE 0 END) AS match_entries,
+          SUM(CASE WHEN pe.type = 'FITNESS'   THEN 1 ELSE 0 END) AS fitness_entries,
+          SUM(CASE WHEN pe.type = 'DISCIPLINE' THEN 1 ELSE 0 END) AS discipline_entries,
+          (SELECT COUNT(*) FROM student_team_assignment sta
+           WHERE sta.student_user_id = u.id AND sta.sport_id = ?) AS in_team
+        FROM sport_enrollments se
+        JOIN users u ON u.id = se.student_user_id
+        LEFT JOIN attendance a
+          ON a.student_user_id = u.id AND a.sport_id = ?
+        LEFT JOIN performance_entries pe
+          ON pe.student_user_id = u.id AND pe.sport_id = ?
+        WHERE se.sport_id = ? AND se.status = 'APPROVED'
+        GROUP BY u.id, u.full_name, u.student_id, se.squad_level
+        ORDER BY se.squad_level DESC, avg_score DESC
+        `,
+        [sportId, sportId, sportId, sportId]
+      );
+
+      return res.json(rows);
+    } catch (err) {
+      console.error("SQUAD-POOL STUDENTS ERROR:", err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/squad-pool/:sportId/:studentUserId/level
+ * Update a student's squad_level (NONE / POOL / SQUAD) for a sport
+ * Body: { level: "NONE" | "POOL" | "SQUAD" }
+ */
+adminRouter.post(
+  "/squad-pool/:sportId/:studentUserId/level",
+  authMiddleware,
+  roleMiddleware(["ADMIN"]),
+  async (req, res) => {
+    try {
+      const sportId = Number(req.params.sportId);
+      const studentUserId = Number(req.params.studentUserId);
+      const level = String(req.body?.level || "").toUpperCase();
+
+      if (!sportId || !studentUserId) {
+        return res.status(400).json({ message: "Invalid sportId or studentUserId" });
+      }
+      if (!["NONE", "POOL", "SQUAD"].includes(level)) {
+        return res.status(400).json({ message: "level must be NONE, POOL, or SQUAD" });
+      }
+
+      // Check enrollment exists and is APPROVED
+      const [rows] = await pool.query(
+        "SELECT id FROM sport_enrollments WHERE sport_id=? AND student_user_id=? AND status='APPROVED'",
+        [sportId, studentUserId]
+      );
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "No approved enrollment found" });
+      }
+
+      await pool.query(
+        "UPDATE sport_enrollments SET squad_level=? WHERE sport_id=? AND student_user_id=?",
+        [level, sportId, studentUserId]
+      );
+
+      // Get sport name for notification
+      const [sportRows] = await pool.query("SELECT name FROM sports WHERE id=?", [sportId]);
+      const sportName = sportRows[0]?.name || "Unknown Sport";
+
+      const notifMessages = {
+        POOL:  `You have been selected to the ${sportName} Pool! Keep training hard.`,
+        SQUAD: `Congratulations! You have been selected to the ${sportName} Squad! 🏆`,
+        NONE:  `Your squad/pool status for ${sportName} has been updated.`,
+      };
+
+      await pool.query(
+        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'SYSTEM')",
+        [
+          studentUserId,
+          `${sportName} — Level Updated`,
+          notifMessages[level],
+        ]
+      );
+
+      return res.json({ ok: true, level });
+    } catch (err) {
+      console.error("SET SQUAD LEVEL ERROR:", err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/squad-pool/:sportId/:studentUserId/team
+ * Toggle student into / out of the team for a sport
+ * Body: { inTeam: boolean }
+ */
+adminRouter.post(
+  "/squad-pool/:sportId/:studentUserId/team",
+  authMiddleware,
+  roleMiddleware(["ADMIN"]),
+  async (req, res) => {
+    try {
+      const sportId = Number(req.params.sportId);
+      const studentUserId = Number(req.params.studentUserId);
+      const inTeam = Boolean(req.body?.inTeam);
+
+      if (!sportId || !studentUserId) {
+        return res.status(400).json({ message: "Invalid sportId or studentUserId" });
+      }
+
+      if (inTeam) {
+        // Safe check-then-insert (avoids needing a unique key with INSERT IGNORE)
+        const [existing] = await pool.query(
+          "SELECT id FROM student_team_assignment WHERE sport_id=? AND student_user_id=?",
+          [sportId, studentUserId]
+        );
+        if (existing.length === 0) {
+          // Use student's actual squad level (must be POOL or SQUAD for the team level enum)
+          const [enrollRow] = await pool.query(
+            "SELECT squad_level FROM sport_enrollments WHERE sport_id=? AND student_user_id=? LIMIT 1",
+            [sportId, studentUserId]
+          );
+          const teamLevel = ["POOL","SQUAD"].includes(enrollRow[0]?.squad_level)
+            ? enrollRow[0].squad_level
+            : "SQUAD";
+          await pool.query(
+            `INSERT INTO student_team_assignment
+               (sport_id, student_user_id, assigned_by_admin_id, level)
+             VALUES (?, ?, ?, ?)`,
+            [sportId, studentUserId, req.user.id, teamLevel]
+          );
+        }
+
+        // Notify student
+        const [sportRows] = await pool.query("SELECT name FROM sports WHERE id=?", [sportId]);
+        const sportName = sportRows[0]?.name || "Unknown Sport";
+        await pool.query(
+          "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'SYSTEM')",
+          [
+            studentUserId,
+            `${sportName} — Team Selected`,
+            `You have been selected for the official ${sportName} team! 🎉`,
+          ]
+        );
+      } else {
+        await pool.query(
+          "DELETE FROM student_team_assignment WHERE sport_id=? AND student_user_id=?",
+          [sportId, studentUserId]
+        );
+      }
+
+      return res.json({ ok: true, inTeam });
+    } catch (err) {
+      console.error("TOGGLE TEAM ERROR:", err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  }
+);
+
 module.exports = { adminRouter };
+

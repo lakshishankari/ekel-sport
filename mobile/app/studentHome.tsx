@@ -3,11 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-nati
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { loadAuth } from "../lib/authStore";
+import { loadLocalProfile } from "../lib/profileStore";
 import { apiGet } from "../lib/api";
 import { logout } from "../lib/logout";
 
 export default function StudentHome() {
   const [unread, setUnread] = useState<number>(0);
+  const [fullName, setFullName] = useState("Student");
+  const [avatarColor, setAvatarColor] = useState("#4F46E5");
 
   async function loadUnread() {
     try {
@@ -27,11 +30,14 @@ export default function StudentHome() {
 
   useEffect(() => {
     (async () => {
-      const { token, role } = await loadAuth();
-      if (!token || role !== "STUDENT") {
+      const auth = await loadAuth();
+      if (!auth.token || auth.role !== "STUDENT") {
         router.replace("/login");
         return;
       }
+      if (auth.fullName) setFullName(auth.fullName);
+      const local = await loadLocalProfile(auth.fullName || "");
+      setAvatarColor(local.avatarColor);
       await loadUnread();
     })();
   }, []);
@@ -40,8 +46,19 @@ export default function StudentHome() {
     <ScrollView style={{ flex: 1, backgroundColor: "#0B0F14" }} contentContainerStyle={styles.container}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.title}>Student</Text>
+        {/* Profile avatar — tappable */}
+        <TouchableOpacity onPress={() => router.push("/studentProfile")} style={styles.avatarBtn}>
+          <View style={[styles.avatarCircle, { backgroundColor: avatarColor }]}>
+            <Text style={styles.avatarInitials}>
+              {fullName.split(" ").filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("")}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title} numberOfLines={1}>
+            {fullName.split(" ")[0]}
+          </Text>
           <Text style={styles.sub}>Dashboard</Text>
         </View>
 
@@ -114,17 +131,6 @@ export default function StudentHome() {
         <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.card} onPress={() => router.push("/studentProfile")}>
-        <View style={styles.cardIcon}>
-          <Ionicons name="person-outline" size={24} color="#C9A227" />
-        </View>
-        <View style={styles.cardContent}>
-          <Text style={styles.cardText}>My Profile</Text>
-          <Text style={styles.cardSub}>Edit bio, faculty, degree, achievements</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#A7B0BE" />
-      </TouchableOpacity>
-
       <TouchableOpacity style={styles.card} onPress={() => router.push("/help")}>
         <View style={styles.cardIcon}>
           <Ionicons name="help-circle-outline" size={24} color="#C9A227" />
@@ -159,12 +165,18 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
     marginTop: 18,
     marginBottom: 18,
   },
-  title: { color: "white", fontSize: 30, fontWeight: "900" },
-  sub: { color: "#A7B0BE", marginTop: 4 },
+  avatarBtn: { flexShrink: 0 },
+  avatarCircle: {
+    width: 46, height: 46, borderRadius: 23,
+    alignItems: "center", justifyContent: "center",
+  },
+  avatarInitials: { color: "white", fontSize: 16, fontWeight: "900" },
+  title: { color: "white", fontSize: 24, fontWeight: "900" },
+  sub: { color: "#A7B0BE", marginTop: 2, fontSize: 13 },
 
   bellBtn: {
     padding: 12,

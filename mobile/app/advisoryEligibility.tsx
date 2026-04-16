@@ -1,344 +1,630 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from "react-native";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+  RefreshControl,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import Screen from "../components/Screen";
-import AppHeader from "../components/AppHeader";
-import AppCard from "../components/AppCard";
+import { loadAuth } from "../lib/authStore";
+import { apiGet } from "../lib/api";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Status = "ELIGIBLE" | "NOT_ELIGIBLE" | "BORDERLINE";
 
 type Student = {
-    id: string;
-    name: string;
-    studentId: string;
-    sport: string;
-    score: number;
-    eligible: boolean;
+  id: string;
+  name: string;
+  studentId: string;
+  department: string;
+  sport: string;
+  matchScore: number;
+  fitnessScore: number;
+  attendance: number;
+  discipline: number;
+  overallScore: number;
+  threshold: number;
+  status: Status;
+  squadLevel: "NONE" | "POOL" | "SQUAD";
 };
 
-export default function AdvisoryEligibility() {
-    const [searchQuery, setSearchQuery] = useState("");
-    const [filterSport, setFilterSport] = useState("All");
+type Sport = { id: number; name: string };
 
-    // Mock data
-    const students: Student[] = [
-        {
-            id: "1",
-            name: "Diwanja Kumar",
-            studentId: "IM/2022/051",
-            sport: "Cricket",
-            score: 85,
-            eligible: true,
-        },
-        {
-            id: "2",
-            name: "John Smith",
-            studentId: "CS/2022/123",
-            sport: "Basketball",
-            score: 62,
-            eligible: true,
-        },
-        {
-            id: "3",
-            name: "Jane Doe",
-            studentId: "PY/2023/045",
-            sport: "Cricket",
-            score: 48,
-            eligible: false,
-        },
-    ];
-
-    const filteredStudents = students.filter((s) => {
-        const matchesSearch =
-            s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            s.studentId.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesSport = filterSport === "All" || s.sport === filterSport;
-        return matchesSearch && matchesSport;
-    });
-
-    return (
-        <Screen>
-            <ScrollView showsVerticalScrollIndicator={false}>
-                <AppHeader
-                    title="Student Eligibility"
-                    subtitle="Colours eligibility status"
-                />
-
-                {/* Filters */}
-                <AppCard style={{ marginTop: 14 }}>
-                    <View style={styles.searchContainer}>
-                        <Ionicons name="search" size={20} color="#A7B0BE" />
-                        <TextInput
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            style={styles.searchInput}
-                            placeholder="Search by name or ID..."
-                            placeholderTextColor="rgba(229,231,235,0.35)"
-                        />
-                    </View>
-
-                    <View style={styles.filterRow}>
-                        <Text style={styles.filterLabel}>Sport:</Text>
-                        <View style={styles.filterBtns}>
-                            {["All", "Cricket", "Basketball"].map((sport) => (
-                                <Pressable
-                                    key={sport}
-                                    style={[
-                                        styles.filterBtn,
-                                        filterSport === sport && styles.filterBtnActive,
-                                    ]}
-                                    onPress={() => setFilterSport(sport)}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.filterBtnText,
-                                            filterSport === sport && styles.filterBtnTextActive,
-                                        ]}
-                                    >
-                                        {sport}
-                                    </Text>
-                                </Pressable>
-                            ))}
-                        </View>
-                    </View>
-                </AppCard>
-
-                {/* Stats */}
-                <View style={styles.statsRow}>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{students.filter(s => s.eligible).length}</Text>
-                        <Text style={styles.statLabel}>Eligible</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{students.filter(s => !s.eligible).length}</Text>
-                        <Text style={styles.statLabel}>Not Eligible</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{students.length}</Text>
-                        <Text style={styles.statLabel}>Total</Text>
-                    </View>
-                </View>
-
-                {/* Students List */}
-                <View style={{ marginTop: 8 }}>
-                    {filteredStudents.map((student) => (
-                        <AppCard key={student.id} style={{ marginTop: 12 }}>
-                            <View style={styles.studentHeader}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.studentName}>{student.name}</Text>
-                                    <Text style={styles.studentId}>{student.studentId}</Text>
-                                </View>
-                                <View
-                                    style={[
-                                        styles.statusBadge,
-                                        student.eligible ? styles.statusEligible : styles.statusNotEligible,
-                                    ]}
-                                >
-                                    <Ionicons
-                                        name={student.eligible ? "checkmark-circle" : "close-circle"}
-                                        size={16}
-                                        color={student.eligible ? "#10B981" : "#EF4444"}
-                                    />
-                                    <Text
-                                        style={[
-                                            styles.statusText,
-                                            student.eligible ? styles.statusTextEligible : styles.statusTextNotEligible,
-                                        ]}
-                                    >
-                                        {student.eligible ? "Eligible" : "Not Eligible"}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.studentInfo}>
-                                <View style={styles.infoItem}>
-                                    <Ionicons name="basketball-outline" size={16} color="#A7B0BE" />
-                                    <Text style={styles.infoText}>{student.sport}</Text>
-                                </View>
-                                <View style={styles.infoItem}>
-                                    <Ionicons name="trophy-outline" size={16} color="#A7B0BE" />
-                                    <Text style={styles.infoText}>Score: {student.score}</Text>
-                                </View>
-                            </View>
-                        </AppCard>
-                    ))}
-
-                    {filteredStudents.length === 0 && (
-                        <View style={styles.emptyState}>
-                            <Ionicons name="search-outline" size={48} color="#A7B0BE" />
-                            <Text style={styles.emptyText}>No students found</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Export Button */}
-                <Pressable style={styles.exportBtn}>
-                    <Ionicons name="download-outline" size={20} color="#C9A227" />
-                    <Text style={styles.exportText}>Export Report</Text>
-                </Pressable>
-            </ScrollView>
-        </Screen>
-    );
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function statusStyle(s: Status): { color: string; bg: string; label: string } {
+  if (s === "ELIGIBLE")   return { color: "#10B981", bg: "rgba(16,185,129,0.1)",  label: "Eligible" };
+  if (s === "BORDERLINE") return { color: "#F59E0B", bg: "rgba(245,158,11,0.1)", label: "Borderline" };
+  return                         { color: "#EF4444", bg: "rgba(239,68,68,0.1)",  label: "Not Eligible" };
 }
 
+function squadLabel(level: Student["squadLevel"]) {
+  if (level === "SQUAD") return { text: "SQUAD", color: "#C9A227" };
+  if (level === "POOL")  return { text: "POOL",  color: "#6366F1" };
+  return                        { text: "—",     color: "#6B7280" };
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function AdvisoryEligibility() {
+  const [sports,       setSports]       = useState<Sport[]>([]);
+  const [activeSport,  setActiveSport]  = useState<Sport | null>(null);
+  const [students,     setStudents]     = useState<Student[]>([]);
+  const [search,       setSearch]       = useState("");
+  const [selected,     setSelected]     = useState<Student | null>(null);
+  const [loadingSports, setLoadingSports] = useState(true);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+
+  // ── Auth guard ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const { token, role } = await loadAuth();
+      if (!token || role !== "ADVISORY") router.replace("/login");
+    })();
+  }, []);
+
+  // ── Load sports list ──────────────────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoadingSports(true);
+        const data = await apiGet<Sport[]>("/api/advisory/sports");
+        setSports(data);
+        if (data.length > 0) setActiveSport(data[0]);
+      } catch (e: any) {
+        setError(e?.message ?? "Could not load sports");
+      } finally {
+        setLoadingSports(false);
+      }
+    })();
+  }, []);
+
+  // ── Load students for active sport ───────────────────────────────────────
+  const loadStudents = useCallback(async (sport: Sport, isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoadingStudents(true);
+      setError(null);
+      const data = await apiGet<Student[]>(`/api/advisory/eligibility?sportId=${sport.id}`);
+      setStudents(data);
+    } catch (e: any) {
+      setError(e?.message ?? "Could not load students");
+      setStudents([]);
+    } finally {
+      setLoadingStudents(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeSport) {
+      setSearch("");
+      loadStudents(activeSport);
+    }
+  }, [activeSport]);
+
+  const onRefresh = () => {
+    if (!activeSport) return;
+    setRefreshing(true);
+    loadStudents(activeSport, true);
+  };
+
+  // ── Filtered list ─────────────────────────────────────────────────────────
+  const sportStudents = useMemo(() => {
+    if (!search.trim()) return students;
+    const q = search.toLowerCase();
+    return students.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.studentId.toLowerCase().includes(q)
+    );
+  }, [students, search]);
+
+  const counts = useMemo(() => ({
+    total:       students.length,
+    eligible:    students.filter((s) => s.status === "ELIGIBLE").length,
+    borderline:  students.filter((s) => s.status === "BORDERLINE").length,
+    notEligible: students.filter((s) => s.status === "NOT_ELIGIBLE").length,
+  }), [students]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <Screen>
+
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={22} color="#F9FAFB" />
+        </Pressable>
+        <View>
+          <Text style={styles.headerTitle}>Student Eligibility</Text>
+          <Text style={styles.headerSub}>Colors eligibility by sport</Text>
+        </View>
+      </View>
+
+      {/* ── Sport tabs (dynamic) ── */}
+      {loadingSports ? (
+        <View style={{ paddingHorizontal: 20, paddingBottom: 10 }}>
+          <ActivityIndicator color="#C9A227" />
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabRow}
+        >
+          {sports.map((sp) => (
+            <Pressable
+              key={sp.id}
+              onPress={() => { setActiveSport(sp); setSearch(""); }}
+              style={[styles.tab, activeSport?.id === sp.id && styles.tabActive]}
+            >
+              <Text style={[styles.tabText, activeSport?.id === sp.id && styles.tabTextActive]}>
+                {sp.name}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* ── Summary strip ── */}
+      <View style={styles.summaryRow}>
+        {[
+          { label: "Total",        value: counts.total,       color: "#F9FAFB" },
+          { label: "Eligible",     value: counts.eligible,    color: "#10B981" },
+          { label: "Borderline",   value: counts.borderline,  color: "#F59E0B" },
+          { label: "Not Eligible", value: counts.notEligible, color: "#EF4444" },
+        ].map((item) => (
+          <View key={item.label} style={styles.summaryCard}>
+            <Text style={[styles.summaryValue, { color: item.color }]}>{item.value}</Text>
+            <Text style={styles.summaryLabel}>{item.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* ── Search ── */}
+      <View style={styles.searchBox}>
+        <Ionicons name="search-outline" size={16} color="#6B7280" />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by name or ID"
+          placeholderTextColor="#4B5563"
+          style={styles.searchInput}
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")} hitSlop={8}>
+            <Ionicons name="close" size={16} color="#6B7280" />
+          </Pressable>
+        )}
+      </View>
+
+      {/* ── Student list ── */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#C9A227"
+            colors={["#C9A227"]}
+          />
+        }
+      >
+        {/* Loading */}
+        {loadingStudents && !refreshing && (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color="#C9A227" />
+            <Text style={styles.centerText}>Loading students…</Text>
+          </View>
+        )}
+
+        {/* Error */}
+        {!loadingStudents && error && (
+          <View style={styles.centerBox}>
+            <Ionicons name="wifi-outline" size={36} color="#EF4444" />
+            <Text style={[styles.centerText, { color: "#EF4444", marginTop: 8 }]}>{error}</Text>
+            <Pressable
+              style={styles.retryBtn}
+              onPress={() => activeSport && loadStudents(activeSport)}
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Empty */}
+        {!loadingStudents && !error && sportStudents.length === 0 && (
+          <View style={styles.centerBox}>
+            <Ionicons name="people-outline" size={40} color="#374151" />
+            <Text style={styles.emptyText}>
+              {search.trim()
+                ? "No students match your search"
+                : `No approved students in ${activeSport?.name ?? "this sport"} yet`}
+            </Text>
+          </View>
+        )}
+
+        {/* List items */}
+        {!loadingStudents && !error &&
+          sportStudents.map((student) => {
+            const st  = statusStyle(student.status);
+            const sql = squadLabel(student.squadLevel);
+            return (
+              <Pressable
+                key={student.id}
+                style={({ pressed }) => [styles.card, pressed && { opacity: 0.82 }]}
+                onPress={() => setSelected(student)}
+              >
+                {/* Left: name + ID + dept */}
+                <View style={styles.cardLeft}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarText}>
+                      {student.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardName}>{student.name}</Text>
+                    <Text style={styles.cardId}>{student.studentId || "—"}</Text>
+                    {student.department && student.department !== "—" && (
+                      <Text style={styles.cardDept}>{student.department}</Text>
+                    )}
+                  </View>
+                </View>
+
+                {/* Right: status + squad + score */}
+                <View style={styles.cardRight}>
+                  <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
+                    <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
+                  </View>
+                  <Text style={[styles.squadTag, { color: sql.color }]}>{sql.text}</Text>
+                  <Text style={styles.scoreText}>{student.overallScore}%</Text>
+                </View>
+              </Pressable>
+            );
+          })
+        }
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
+
+      {/* ── Detail Sheet ── */}
+      <Modal
+        visible={!!selected}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelected(null)}
+      >
+        <View style={styles.overlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelected(null)} />
+          {selected && (() => {
+            const st  = statusStyle(selected.status);
+            const sql = squadLabel(selected.squadLevel);
+            return (
+              <View style={styles.sheet}>
+                <View style={styles.sheetHandle} />
+
+                {/* Name row */}
+                <View style={styles.sheetNameRow}>
+                  <View style={styles.sheetAvatar}>
+                    <Text style={styles.sheetAvatarText}>
+                      {selected.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sheetName}>{selected.name}</Text>
+                    <Text style={styles.sheetId}>{selected.studentId || "—"}</Text>
+                    {selected.department && selected.department !== "—" && (
+                      <Text style={styles.sheetDept}>{selected.department}</Text>
+                    )}
+                  </View>
+                  <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
+                    <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
+                  </View>
+                </View>
+
+                {/* Hero score */}
+                <View style={styles.heroCard}>
+                  <Text style={styles.heroLabel}>Weighted Eligibility Score</Text>
+                  <Text style={[styles.heroScore, { color: st.color }]}>{selected.overallScore}%</Text>
+                  <Text style={styles.heroMeta}>
+                    {activeSport?.name} · Threshold {selected.threshold}% ·{" "}
+                    <Text style={{ color: sql.color }}>{sql.text}</Text>
+                  </Text>
+                  {/* Score bar */}
+                  <View style={styles.heroBg}>
+                    <View
+                      style={[
+                        styles.heroFill,
+                        { width: `${selected.overallScore}%` as any, backgroundColor: st.color },
+                      ]}
+                    />
+                    <View style={[styles.thresholdLine, { left: `${selected.threshold}%` as any }]} />
+                  </View>
+                  <Text style={styles.thresholdNote}>▲ Threshold at {selected.threshold}%</Text>
+                </View>
+
+                {/* Breakdown table */}
+                <Text style={styles.breakdownTitle}>Score Breakdown</Text>
+                <View style={styles.breakdownTable}>
+                  {[
+                    { label: "Match Performance", value: selected.matchScore,   weight: 40 },
+                    { label: "Fitness Tests",      value: selected.fitnessScore, weight: 25 },
+                    { label: "Attendance",         value: selected.attendance,   weight: 20 },
+                    { label: "Discipline",         value: selected.discipline,   weight: 15 },
+                  ].map((row, i, arr) => (
+                    <View
+                      key={row.label}
+                      style={[styles.bRow, i < arr.length - 1 && styles.bRowBorder]}
+                    >
+                      <Text style={styles.bLabel}>{row.label}</Text>
+                      <Text style={styles.bWeight}>{row.weight}%</Text>
+                      <Text style={styles.bScore}>{row.value}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <Pressable style={styles.closeBtn} onPress={() => setSelected(null)}>
+                  <Text style={styles.closeBtnText}>Close</Text>
+                </Pressable>
+              </View>
+            );
+          })()}
+        </View>
+      </Modal>
+    </Screen>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    searchContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        backgroundColor: "rgba(255,255,255,0.04)",
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        height: 48,
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.10)",
-    },
-    searchInput: {
-        flex: 1,
-        color: "#F9FAFB",
-        fontSize: 15,
-        fontWeight: "600",
-    },
-    filterRow: {
-        marginTop: 14,
-    },
-    filterLabel: {
-        color: "rgba(229,231,235,0.70)",
-        fontSize: 13,
-        fontWeight: "800",
-        marginBottom: 8,
-    },
-    filterBtns: {
-        flexDirection: "row",
-        gap: 8,
-    },
-    filterBtn: {
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 10,
-        backgroundColor: "rgba(255,255,255,0.04)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.10)",
-    },
-    filterBtnActive: {
-        backgroundColor: "rgba(201,162,39,0.15)",
-        borderColor: "#C9A227",
-    },
-    filterBtnText: {
-        color: "#A7B0BE",
-        fontSize: 13,
-        fontWeight: "700",
-    },
-    filterBtnTextActive: {
-        color: "#C9A227",
-    },
-    statsRow: {
-        flexDirection: "row",
-        gap: 10,
-        marginTop: 16,
-    },
-    statCard: {
-        flex: 1,
-        backgroundColor: "rgba(255,255,255,0.06)",
-        borderRadius: 14,
-        padding: 16,
-        alignItems: "center",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.08)",
-    },
-    statValue: {
-        color: "#C9A227",
-        fontSize: 24,
-        fontWeight: "900",
-    },
-    statLabel: {
-        color: "#A7B0BE",
-        fontSize: 11,
-        fontWeight: "700",
-        marginTop: 4,
-    },
-    studentHeader: {
-        flexDirection: "row",
-        alignItems: "flex-start",
-        gap: 12,
-        marginBottom: 12,
-    },
-    studentName: {
-        color: "#F9FAFB",
-        fontSize: 16,
-        fontWeight: "800",
-    },
-    studentId: {
-        color: "#A7B0BE",
-        fontSize: 13,
-        fontWeight: "600",
-        marginTop: 2,
-    },
-    statusBadge: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 8,
-    },
-    statusEligible: {
-        backgroundColor: "rgba(16,185,129,0.1)",
-    },
-    statusNotEligible: {
-        backgroundColor: "rgba(239,68,68,0.1)",
-    },
-    statusText: {
-        fontSize: 12,
-        fontWeight: "700",
-    },
-    statusTextEligible: {
-        color: "#10B981",
-    },
-    statusTextNotEligible: {
-        color: "#EF4444",
-    },
-    studentInfo: {
-        flexDirection: "row",
-        gap: 16,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: "rgba(255,255,255,0.05)",
-    },
-    infoItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-    },
-    infoText: {
-        color: "rgba(229,231,235,0.75)",
-        fontSize: 13,
-        fontWeight: "600",
-    },
-    emptyState: {
-        alignItems: "center",
-        paddingVertical: 48,
-    },
-    emptyText: {
-        color: "#A7B0BE",
-        fontSize: 15,
-        fontWeight: "600",
-        marginTop: 12,
-    },
-    exportBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        marginTop: 20,
-        marginBottom: 20,
-        padding: 16,
-        borderRadius: 14,
-        backgroundColor: "rgba(201,162,39,0.1)",
-        borderWidth: 1,
-        borderColor: "rgba(201,162,39,0.3)",
-    },
-    exportText: {
-        color: "#C9A227",
-        fontSize: 16,
-        fontWeight: "800",
-    },
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  backBtn: { padding: 2 },
+  headerTitle: { color: "#F9FAFB", fontSize: 20, fontWeight: "900" },
+  headerSub:   { color: "rgba(229,231,235,0.45)", fontSize: 12, fontWeight: "600", marginTop: 2 },
+
+  // Sport tabs (horizontal scroll)
+  tabRow: {
+    paddingHorizontal: 20,
+    gap: 8,
+    paddingBottom: 16,
+    flexDirection: "row",
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  tabActive: {
+    backgroundColor: "rgba(201,162,39,0.18)",
+    borderColor: "#C9A227",
+  },
+  tabText:       { color: "#D1D5DB", fontSize: 13, fontWeight: "700" },
+  tabTextActive: { color: "#C9A227", fontSize: 13, fontWeight: "800" },
+
+  // Summary
+  summaryRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 20,
+    marginBottom: 14,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: "rgba(18,24,38,0.85)",
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  summaryValue: { fontSize: 18, fontWeight: "900" },
+  summaryLabel: { color: "rgba(229,231,235,0.4)", fontSize: 9, fontWeight: "700", marginTop: 3, textAlign: "center" },
+
+  // Search
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 14,
+    backgroundColor: "rgba(18,24,38,0.85)",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+  },
+  searchInput: { flex: 1, color: "#F9FAFB", fontSize: 14, fontWeight: "500" },
+
+  // List
+  list: { paddingHorizontal: 20 },
+  centerBox: {
+    alignItems: "center",
+    paddingTop: 60,
+    gap: 10,
+    paddingHorizontal: 20,
+  },
+  centerText: {
+    color: "rgba(229,231,235,0.4)",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  emptyText: {
+    color: "#4B5563",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  retryBtn: {
+    marginTop: 12,
+    backgroundColor: "rgba(201,162,39,0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.3)",
+  },
+  retryText: { color: "#C9A227", fontSize: 14, fontWeight: "800" },
+
+  // Card
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(18,24,38,0.85)",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    gap: 12,
+  },
+  cardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(201,162,39,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.25)",
+  },
+  avatarText: { color: "#C9A227", fontSize: 13, fontWeight: "800" },
+  cardName:   { color: "#F9FAFB", fontSize: 14, fontWeight: "700" },
+  cardId:     { color: "#6B7280", fontSize: 11, fontWeight: "600", marginTop: 2 },
+  cardDept:   { color: "rgba(229,231,235,0.35)", fontSize: 10, fontWeight: "600", marginTop: 1 },
+
+  cardRight: { alignItems: "flex-end", gap: 6 },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusText: { fontSize: 11, fontWeight: "700" },
+  squadTag:   { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  scoreText:  { color: "#F9FAFB", fontSize: 15, fontWeight: "900" },
+
+  // Modal
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
+  sheet: {
+    backgroundColor: "#0F1623",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 22,
+    paddingBottom: 40,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignSelf: "center",
+    marginBottom: 18,
+  },
+  sheetNameRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 18 },
+  sheetAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "rgba(201,162,39,0.12)",
+    borderWidth: 1.5,
+    borderColor: "rgba(201,162,39,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetAvatarText: { color: "#C9A227", fontSize: 15, fontWeight: "900" },
+  sheetName: { color: "#F9FAFB", fontSize: 16, fontWeight: "800" },
+  sheetId:   { color: "#6B7280", fontSize: 12, fontWeight: "600", marginTop: 2 },
+  sheetDept: { color: "rgba(229,231,235,0.35)", fontSize: 11, fontWeight: "600", marginTop: 2 },
+
+  // Hero score
+  heroCard: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 14,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    gap: 4,
+  },
+  heroLabel: { color: "rgba(229,231,235,0.45)", fontSize: 11, fontWeight: "700" },
+  heroScore: { fontSize: 48, fontWeight: "900", marginTop: 2 },
+  heroMeta:  { color: "rgba(229,231,235,0.45)", fontSize: 12, fontWeight: "600", marginBottom: 10 },
+  heroBg: {
+    width: "100%",
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    overflow: "visible",
+    position: "relative",
+    marginTop: 4,
+  },
+  heroFill:      { height: 8, borderRadius: 4, position: "absolute", left: 0, top: 0 },
+  thresholdLine: {
+    position: "absolute",
+    top: -5,
+    width: 2,
+    height: 18,
+    backgroundColor: "rgba(239,68,68,0.7)",
+    borderRadius: 1,
+  },
+  thresholdNote: { color: "rgba(239,68,68,0.55)", fontSize: 10, fontWeight: "700", marginTop: 8, alignSelf: "flex-start" },
+
+  // Breakdown
+  breakdownTitle: { color: "#F9FAFB", fontSize: 14, fontWeight: "800", marginBottom: 10 },
+  breakdownTable: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
+    marginBottom: 18,
+  },
+  bRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  bRowBorder: { borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)" },
+  bLabel:  { flex: 1, color: "#D1D5DB", fontSize: 13, fontWeight: "600" },
+  bWeight: { color: "#6B7280", fontSize: 12, fontWeight: "700", width: 36, textAlign: "right" },
+  bScore:  { color: "#F9FAFB", fontSize: 14, fontWeight: "900", width: 36, textAlign: "right" },
+
+  // Close
+  closeBtn: {
+    backgroundColor: "#C9A227",
+    borderRadius: 14,
+    height: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeBtnText: { color: "#0B0F14", fontSize: 15, fontWeight: "900" },
 });

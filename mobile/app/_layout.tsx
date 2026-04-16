@@ -7,7 +7,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     // Role home screens where back button should be blocked
-    const homeRoutes = ["/studentHome", "/adminHome", "/advisoryHome", "/advisoryWeightages"];
+    const homeRoutes = ["/studentHome", "/adminHome", "/advisoryHome"];
 
     // Block hardware back button on home screens to prevent unauthorized navigation
     const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {

@@ -43,22 +43,12 @@ export default function LoginScreen() {
         password: pw,
       });
 
-      await saveAuth(data.token, data.user.role);
+      await saveAuth(data.token, data.user.role, data.user.fullName, data.user.email);
 
-      // Safely clear navigation stack
-      try {
-        let iterations = 0;
-        while (router.canGoBack() && iterations < 20) {
-          router.back();
-          iterations++;
-        }
-      } catch (e) {
-        // Ignore navigation errors
-      }
-
+      // Replace current screen — this resets the stack cleanly
       if (data.user.role === "STUDENT") router.replace("/studentHome" as Href);
       else if (data.user.role === "ADMIN") router.replace("/adminHome" as Href);
-      else router.replace("/advisoryWeightages" as Href);
+      else router.replace("/advisoryHome" as Href);
     } catch (e: any) {
       Alert.alert("Login failed", e?.message || "Something went wrong");
     } finally {

@@ -195,7 +195,14 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     backBtn: {
-        padding: 4,
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(255,255,255,0.06)",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.08)",
     },
     headerTitle: {
         color: "#F9FAFB",

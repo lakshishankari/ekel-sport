@@ -12,6 +12,8 @@ import {
 import { router } from "expo-router";
 import { apiGet } from "../lib/api";
 import { loadAuth } from "../lib/authStore";
+import Screen from "../components/Screen";
+import AppHeader from "../components/AppHeader";
 
 type MySport = {
   id: number;
@@ -59,9 +61,8 @@ export default function MySports() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>My Sports</Text>
-      <Text style={styles.sub}>Only approved sports appear here</Text>
+    <Screen>
+      <AppHeader title="My Sports" subtitle="Your approved sports" />
 
       {loading ? (
         <ActivityIndicator />
@@ -98,18 +99,12 @@ export default function MySports() {
           }
         />
       )}
-
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0B0F14", padding: 20 },
-  title: { color: "white", fontSize: 26, fontWeight: "900", textAlign: "center" },
-  sub: { color: "#A7B0BE", textAlign: "center", marginTop: 6, marginBottom: 14 },
 
   card: {
     backgroundColor: "#121826",
@@ -131,7 +126,4 @@ const styles = StyleSheet.create({
   },
   btnText: { fontWeight: "900", color: "#111827" },
   note: { color: "#A7B0BE", marginTop: 10, fontSize: 12 },
-
-  backBtn: { alignSelf: "center", marginTop: 10 },
-  backText: { color: "#A7B0BE", textDecorationLine: "underline" },
 });

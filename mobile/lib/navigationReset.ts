@@ -1,16 +1,11 @@
 import { router } from "expo-router";
 
 /**
- * Clears the entire navigation stack and navigates to a target screen
- * Use this for logout, login success, and role changes to ensure clean navigation state
+ * Navigates to a target screen using replace, which resets the stack cleanly.
+ * Use this for logout, login success, and role changes to ensure clean navigation state.
  */
 export function resetNavigationTo(path: string) {
-    // Clear entire navigation history
-    while (router.canGoBack()) {
-        router.back();
-    }
-
-    // Navigate to target with replace (prevents adding to stack)
+    // router.replace() replaces the current entry and clears forward history
     router.replace(path as any);
 }
 

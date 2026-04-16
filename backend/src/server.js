@@ -6,6 +6,7 @@ const { router } = require("./routes"); // src/routes.js
 const { authRouter } = require("./auth.routes"); // src/auth.routes.js
 const { adminRouter } = require("./admin.routes"); // src/admin.routes.js
 const { studentRouter } = require("./student.routes"); // src/student.routes.js
+const { advisoryRouter } = require("./advisory.routes"); // src/advisory.routes.js
 
 const otpRoutes = require("./routes/otpRoutes"); // src/routes/otpRoutes.js
 const authResetRoutes = require("./routes/authResetRoutes"); // src/routes/authResetRoutes.js
@@ -20,6 +21,7 @@ app.use("/api", router);
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/student", studentRouter);
+app.use("/api/advisory", advisoryRouter);
 
 // OTP
 app.use("/api/otp", otpRoutes);

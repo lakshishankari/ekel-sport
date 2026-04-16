@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, Alert, TouchableOp
 import { router } from "expo-router";
 import { apiGet } from "../lib/api";
 import { loadAuth } from "../lib/authStore";
+import Screen from "../components/Screen";
+import AppHeader from "../components/AppHeader";
 
 type User = {
   id: number;
@@ -40,16 +42,16 @@ export default function AdminUsers() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#D4AF37" />
-      </View>
+      <Screen>
+        <AppHeader title="All Users" subtitle="Registered accounts" />
+        <ActivityIndicator size="large" color="#D4AF37" style={{ marginTop: 40 }} />
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>All Users</Text>
-
+    <Screen>
+      <AppHeader title="All Users" subtitle="Registered accounts" />
       <FlatList
         data={users}
         keyExtractor={(item) => item.id.toString()}
@@ -62,33 +64,12 @@ export default function AdminUsers() {
           </View>
         )}
       />
-
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0B0F14",
-    padding: 20,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#0B0F14",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "white",
-    marginBottom: 16,
-    textAlign: "center",
-  },
+  container: { flex: 1, backgroundColor: "#0B0F14", padding: 20 },
   card: {
     backgroundColor: "#121826",
     borderRadius: 14,
@@ -110,13 +91,5 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: "#D4AF37",
     fontWeight: "700",
-  },
-  backBtn: {
-    marginTop: 10,
-    alignSelf: "center",
-  },
-  backText: {
-    color: "#A7B0BE",
-    textDecorationLine: "underline",
   },
 });

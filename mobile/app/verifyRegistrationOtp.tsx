@@ -47,7 +47,7 @@ export default function VerifyRegistrationOtp() {
 
             // Save token and user data using authStore for consistency
             if (data.token && data.user) {
-                await saveAuth(data.token, data.user.role);
+                await saveAuth(data.token, data.user.role, data.user.fullName || fullName, data.user.email || email);
             }
 
             Alert.alert("Success! 🎉", "Your account has been created successfully!", [

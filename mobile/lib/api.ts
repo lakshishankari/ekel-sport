@@ -54,40 +54,74 @@ export async function apiPost<T>(
   token?: string
 ): Promise<T> {
   const finalToken = normalizeToken(await getToken(token));
+  const url = buildUrl(path);
 
-  const res = await fetch(buildUrl(path), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-  const data: any = await parseResponse(res);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
 
-  if (!res.ok) {
-    throw new Error(data?.message || `Request failed (${res.status})`);
+    const data: any = await parseResponse(res);
+
+    if (!res.ok) {
+      throw new Error(data?.message || `Request failed (${res.status})`);
+    }
+
+    return data as T;
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      throw new Error(`Request timed out. Check that the server is running at ${url}`);
+    }
+    if (err.message && !err.message.includes("Request failed") && !err.message.includes("timed out")) {
+      throw new Error(`Network error — could not reach server at ${url}. Make sure your phone is on the same WiFi as the PC.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return data as T;
 }
 
 export async function apiGet<T>(path: string, token?: string): Promise<T> {
   const finalToken = normalizeToken(await getToken(token));
+  const url = buildUrl(path);
 
-  const res = await fetch(buildUrl(path), {
-    method: "GET",
-    headers: {
-      ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-  const data: any = await parseResponse(res);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      signal: controller.signal,
+      headers: {
+        ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
+      },
+    });
 
-  if (!res.ok) {
-    throw new Error(data?.message || `Request failed (${res.status})`);
+    const data: any = await parseResponse(res);
+
+    if (!res.ok) {
+      throw new Error(data?.message || `Request failed (${res.status})`);
+    }
+
+    return data as T;
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      throw new Error(`Request timed out. Check that the server is running at ${url}`);
+    }
+    if (err.message && !err.message.includes("Request failed") && !err.message.includes("timed out")) {
+      throw new Error(`Network error — could not reach server at ${url}. Make sure your phone is on the same WiFi as the PC.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return data as T;
 }

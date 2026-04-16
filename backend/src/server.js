@@ -37,6 +37,41 @@ app.get("/", (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => {
+
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.warn(`⚠️  Port ${PORT} in use — killing old process and retrying…`);
+    const { execSync } = require("child_process");
+    try {
+      if (process.platform === "win32") {
+        const result = execSync(
+          `netstat -ano | findstr :${PORT}`,
+          { encoding: "utf8" }
+        );
+        const lines = result.trim().split("\n");
+        lines.forEach((line) => {
+          const parts = line.trim().split(/\s+/);
+          const pid = parts[parts.length - 1];
+          if (pid && pid !== "0" && parseInt(pid) !== process.pid) {
+            try { execSync(`taskkill /PID ${pid} /F`); } catch (_) {}
+          }
+        });
+      } else {
+        execSync(`fuser -k ${PORT}/tcp`);
+      }
+    } catch (_) {}
+
+    setTimeout(() => {
+      server.close();
+      server.listen(PORT, "0.0.0.0", () => {
+        console.log(`✅ Server running on http://0.0.0.0:${PORT} (after port recovery)`);
+      });
+    }, 1000);
+  } else {
+    throw err;
+  }
 });

@@ -29,7 +29,7 @@ async function sendOtp(req, res) {
       return res.status(400).json({ message: "Invalid purpose" });
     }
 
-    // OPTIONAL: stop spamming (if last OTP created < 60s ago)
+    // Rate-limit: block if last OTP was sent < 30s ago
     const [recent] = await pool.query(
       `SELECT id, created_at FROM otp_codes
        WHERE email=? AND purpose=? 
@@ -39,8 +39,13 @@ async function sendOtp(req, res) {
 
     if (recent.length) {
       const last = new Date(recent[0].created_at).getTime();
-      if (Date.now() - last < 60 * 1000) {
-        return res.status(429).json({ message: "Please wait before requesting another OTP" });
+      const elapsed = Date.now() - last;
+      const cooldown = 30 * 1000; // 30 seconds
+      if (elapsed < cooldown) {
+        const remaining = Math.ceil((cooldown - elapsed) / 1000);
+        return res.status(429).json({
+          message: `Please wait ${remaining} second${remaining !== 1 ? "s" : ""} before requesting another OTP`,
+        });
       }
     }
 

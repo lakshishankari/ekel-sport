@@ -41,7 +41,9 @@ router.post("/forgot-password", async (req, res) => {
     await sendEmail(
       email,
       "EKEL Sport - Password Reset OTP",
-      `Your OTP is: ${otp}\nThis OTP expires in ${OTP_EXP_MINUTES} minutes.`
+      `Your OTP is: ${otp}\nThis OTP expires in ${OTP_EXP_MINUTES} minutes.`,
+      otp,
+      "RESET_PASSWORD"
     );
 
     return res.json({ message: "OTP sent" });
@@ -133,6 +135,56 @@ router.post("/reset-password", async (req, res) => {
     await pool.query("UPDATE users SET password_hash=? WHERE id=?", [passwordHash, payload.user_id]);
 
     return res.json({ message: "Password updated" });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// 4) resend OTP (forgot password)
+router.post("/resend-otp", async (req, res) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: "Email required" });
+
+    const [users] = await pool.query("SELECT id, email FROM users WHERE email=? LIMIT 1", [email]);
+    if (users.length === 0) {
+      return res.json({ message: "If your email exists, OTP has been sent." });
+    }
+
+    const user = users[0];
+
+    // Rate limit: 60 seconds
+    const [recent] = await pool.query(
+      "SELECT created_at FROM password_reset_otps WHERE user_id=? ORDER BY id DESC LIMIT 1",
+      [user.id]
+    );
+    if (recent.length) {
+      const last = new Date(recent[0].created_at).getTime();
+      if (Date.now() - last < 60 * 1000) {
+        return res.status(429).json({ message: "Please wait 60 seconds before requesting another OTP" });
+      }
+    }
+
+    const otp = genOtp6();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + OTP_EXP_MINUTES * 60 * 1000);
+    const expiresStr = expiresAt.toISOString().slice(0, 19).replace("T", " ");
+
+    await pool.query(
+      "INSERT INTO password_reset_otps (user_id, otp_hash, expires_at) VALUES (?,?,?)",
+      [user.id, otpHash, expiresStr]
+    );
+
+    await sendEmail(
+      email,
+      "EKEL Sport - Password Reset OTP",
+      `Your OTP is: ${otp}\nThis OTP expires in ${OTP_EXP_MINUTES} minutes.`,
+      otp,
+      "RESET_PASSWORD"
+    );
+
+    return res.json({ message: "OTP resent" });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ message: "Server error" });

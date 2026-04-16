@@ -104,11 +104,13 @@ router.post("/send-registration-otp", async (req, res) => {
             [cleanEmail, "REGISTER", otp_hash, expires_at]
         );
 
-        // Send email
+        // Send email (HTML)
         await sendEmail(
             cleanEmail,
-            "EKEL Sport - Registration OTP",
-            `Welcome to EKEL Sport!\n\nYour registration OTP is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, please ignore this email.`
+            "EKEL Sport - Email Verification OTP",
+            `Welcome to EKEL Sport! Your OTP is: ${otp}. Expires in 10 minutes.`,
+            otp,
+            "REGISTER"
         );
 
         return res.json({ message: "OTP sent to your email" });

@@ -81,7 +81,8 @@ export async function apiPost<T>(
     if (err.name === "AbortError") {
       throw new Error(`Request timed out. Check that the server is running at ${url}`);
     }
-    if (err.message && !err.message.includes("Request failed") && !err.message.includes("timed out")) {
+    // Only show "network error" for genuine connection failures (TypeError from fetch)
+    if (err instanceof TypeError) {
       throw new Error(`Network error — could not reach server at ${url}. Make sure your phone is on the same WiFi as the PC.`);
     }
     throw err;
@@ -117,7 +118,8 @@ export async function apiGet<T>(path: string, token?: string): Promise<T> {
     if (err.name === "AbortError") {
       throw new Error(`Request timed out. Check that the server is running at ${url}`);
     }
-    if (err.message && !err.message.includes("Request failed") && !err.message.includes("timed out")) {
+    // Only show "network error" for genuine connection failures (TypeError from fetch)
+    if (err instanceof TypeError) {
       throw new Error(`Network error — could not reach server at ${url}. Make sure your phone is on the same WiFi as the PC.`);
     }
     throw err;

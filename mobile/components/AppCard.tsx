@@ -1,5 +1,6 @@
 import React from "react";
-import { View, StyleSheet, ViewStyle } from "react-native";
+import { View, ViewStyle } from "react-native";
+import { useAppTheme } from "../lib/themeStore";
 
 type Props = {
   children: React.ReactNode;
@@ -7,20 +8,26 @@ type Props = {
 };
 
 export default function AppCard({ children, style }: Props) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  const { theme } = useAppTheme();
+  return (
+    <View
+      style={[
+        {
+          borderRadius: 18,
+          padding: 16,
+          backgroundColor: theme.bgCard,
+          borderWidth: 1,
+          borderColor: theme.border,
+          shadowColor: "#000",
+          shadowOpacity: 0.15,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 3,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 18,
-    padding: 16,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-});

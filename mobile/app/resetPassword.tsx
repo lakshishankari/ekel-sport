@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from "react";
-import { Text, StyleSheet, TextInput, Pressable, Alert, View } from "react-native";
+import { Text, TextInput, Pressable, Alert, View, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-
 import Screen from "../components/Screen";
 import AppHeader from "../components/AppHeader";
 import AppCard from "../components/AppCard";
 import { API_BASE_URL } from "../lib/config";
+import { useAppTheme } from "../lib/themeStore";
 
 export default function ResetPassword() {
+  const { theme } = useAppTheme();
   const params = useLocalSearchParams();
   const email = useMemo(() => String(params.email || "").trim().toLowerCase(), [params.email]);
   const resetToken = useMemo(() => String(params.reset_token || ""), [params.reset_token]);
@@ -23,7 +24,6 @@ export default function ResetPassword() {
     if (!email || !resetToken) return Alert.alert("Missing data", "Go back and try again.");
     if (pw1.length < 6) return Alert.alert("Weak password", "Use at least 6 characters.");
     if (pw1 !== pw2) return Alert.alert("Mismatch", "Passwords do not match.");
-
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
@@ -31,10 +31,8 @@ export default function ResetPassword() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, reset_token: resetToken, new_password: pw1 }),
       });
-
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Failed");
-
       Alert.alert("Success", "Password reset successful. Please login.");
       router.replace("/login");
     } catch (e: any) {
@@ -44,95 +42,51 @@ export default function ResetPassword() {
     }
   };
 
+  const inputStyle = {
+    height: 48,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingRight: 45,
+    color: theme.text,
+    fontWeight: "800" as const,
+    backgroundColor: theme.bgInput,
+    borderWidth: 1,
+    borderColor: theme.border,
+  };
+
   return (
     <Screen>
       <AppHeader title="Reset Password" subtitle="Set a new password" showBack />
-
       <AppCard style={{ marginTop: 14 }}>
-        <Text style={styles.label}>New password</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            value={pw1}
-            onChangeText={setPw1}
-            secureTextEntry={!showPw1}
-            style={styles.field}
-            placeholder="••••••"
-            placeholderTextColor="rgba(229,231,235,0.35)"
-          />
-          <Pressable
-            onPress={() => setShowPw1(!showPw1)}
-            style={styles.eyeIcon}
-          >
-            <Ionicons
-              name={showPw1 ? "eye-outline" : "eye-off-outline"}
-              size={20}
-              color="rgba(229,231,235,0.5)"
-            />
+
+        <Text style={{ marginTop: 10, color: theme.textSub, fontSize: 12.5, fontWeight: "800" }}>New password</Text>
+        <View style={{ position: "relative", marginTop: 6 }}>
+          <TextInput value={pw1} onChangeText={setPw1} secureTextEntry={!showPw1} style={inputStyle} placeholder="••••••" placeholderTextColor={theme.textMuted} />
+          <Pressable onPress={() => setShowPw1(!showPw1)} style={{ position: "absolute", right: 12, top: 14 }}>
+            <Ionicons name={showPw1 ? "eye-outline" : "eye-off-outline"} size={20} color={theme.textSub} />
           </Pressable>
         </View>
 
-        <Text style={styles.label}>Confirm password</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            value={pw2}
-            onChangeText={setPw2}
-            secureTextEntry={!showPw2}
-            style={styles.field}
-            placeholder="••••••"
-            placeholderTextColor="rgba(229,231,235,0.35)"
-          />
-          <Pressable
-            onPress={() => setShowPw2(!showPw2)}
-            style={styles.eyeIcon}
-          >
-            <Ionicons
-              name={showPw2 ? "eye-outline" : "eye-off-outline"}
-              size={20}
-              color="rgba(229,231,235,0.5)"
-            />
+        <Text style={{ marginTop: 14, color: theme.textSub, fontSize: 12.5, fontWeight: "800" }}>Confirm password</Text>
+        <View style={{ position: "relative", marginTop: 6 }}>
+          <TextInput value={pw2} onChangeText={setPw2} secureTextEntry={!showPw2} style={inputStyle} placeholder="••••••" placeholderTextColor={theme.textMuted} />
+          <Pressable onPress={() => setShowPw2(!showPw2)} style={{ position: "absolute", right: 12, top: 14 }}>
+            <Ionicons name={showPw2 ? "eye-outline" : "eye-off-outline"} size={20} color={theme.textSub} />
           </Pressable>
         </View>
 
-        <Pressable style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]} onPress={submit} disabled={loading}>
-          <Ionicons name="checkmark-circle-outline" size={18} color="#111827" />
-          <Text style={styles.btnText}>{loading ? "Saving..." : "Save New Password"}</Text>
+        <Pressable
+          style={({ pressed }) => [{ marginTop: 18, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: theme.btnPrimary, flexDirection: "row", gap: 8 }, pressed && { opacity: 0.85 }]}
+          onPress={submit} disabled={loading}
+        >
+          {loading ? <ActivityIndicator color={theme.btnPrimaryText} /> : (
+            <>
+              <Ionicons name="checkmark-circle-outline" size={18} color={theme.btnPrimaryText} />
+              <Text style={{ color: theme.btnPrimaryText, fontSize: 16, fontWeight: "900" }}>Save New Password</Text>
+            </>
+          )}
         </Pressable>
       </AppCard>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  label: { marginTop: 10, color: "rgba(229,231,235,0.70)", fontSize: 12.5, fontWeight: "800" },
-  inputContainer: {
-    position: "relative",
-    marginTop: 6,
-  },
-  field: {
-    height: 48,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingRight: 45,
-    color: "#F9FAFB",
-    fontWeight: "800",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-  },
-  eyeIcon: {
-    position: "absolute",
-    right: 12,
-    top: 14,
-  },
-  btn: {
-    marginTop: 14,
-    height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#C9A227",
-    flexDirection: "row",
-    gap: 8,
-  },
-  btnText: { color: "#111827", fontSize: 16, fontWeight: "900" },
-});

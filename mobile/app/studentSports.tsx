@@ -1,19 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  Linking,
+  View, Text, FlatList, TouchableOpacity,
+  ActivityIndicator, Alert, Linking, RefreshControl,
 } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { apiGet, apiPost } from "../lib/api";
 import { loadAuth } from "../lib/authStore";
 import Screen from "../components/Screen";
 import AppHeader from "../components/AppHeader";
+import { useAppTheme } from "../lib/themeStore";
 
 type EnrollmentStatus = "NOT_REQUESTED" | "PENDING" | "APPROVED" | "REJECTED";
 
@@ -28,53 +24,54 @@ type Sport = {
   enrollment_status: EnrollmentStatus;
 };
 
-function statusLabel(s: EnrollmentStatus) {
-  if (s === "NOT_REQUESTED") return "Not requested";
-  if (s === "PENDING") return "Pending approval";
-  if (s === "APPROVED") return "Approved";
-  return "Rejected";
-}
+const STATUS_CONFIG: Record<EnrollmentStatus, { label: string; bg: string; text: string }> = {
+  NOT_REQUESTED: { label: "Not enrolled", bg: "#37415122", text: "#9CA3AF" },
+  PENDING:       { label: "Pending",       bg: "#F59E0B22", text: "#F59E0B" },
+  APPROVED:      { label: "Approved",      bg: "#10B98122", text: "#10B981" },
+  REJECTED:      { label: "Rejected",      bg: "#EF444422", text: "#EF4444" },
+};
 
 export default function StudentSports() {
+  const { theme } = useAppTheme();
   const [sports, setSports] = useState<Sport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
 
-  async function fetchSports() {
+  const fetchSports = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
+      setError(null);
       const { token, role } = await loadAuth();
-      if (!token) return router.replace("/login");
-      if (role !== "STUDENT") return router.replace("/");
-
+      if (!token) { router.replace("/login"); return; }
+      if (role !== "STUDENT") { router.replace("/"); return; }
       const data = await apiGet<Sport[]>("/api/student/sports", token);
-      setSports(data);
+      setSports(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      Alert.alert("Error", e?.message || "Failed to load sports");
+      setError(e?.message || "Failed to load sports");
+      setSports([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
-
-  useEffect(() => {
-    fetchSports();
   }, []);
+
+  useEffect(() => { fetchSports(); }, [fetchSports]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchSports(true);
+  }, [fetchSports]);
 
   async function requestEnroll(sportId: number) {
     try {
       setSubmittingId(sportId);
-
       const { token } = await loadAuth();
-      if (!token) return router.replace("/login");
-
-      const res = await apiPost<{ message: string }>(
-        `/api/student/sports/${sportId}/enroll`,
-        {},
-        token
-      );
-
-      Alert.alert("Request sent", res.message || "Enrollment request submitted");
-      await fetchSports(); // ✅ refresh statuses
+      if (!token) { router.replace("/login"); return; }
+      const res = await apiPost<{ message: string }>(`/api/student/sports/${sportId}/enroll`, {}, token);
+      Alert.alert("Request Sent ✅", res.message || "Enrollment request submitted");
+      await fetchSports(true);
     } catch (e: any) {
       Alert.alert("Failed", e?.message || "Could not submit request");
     } finally {
@@ -85,32 +82,43 @@ export default function StudentSports() {
   async function openWhatsApp(link: string) {
     try {
       const ok = await Linking.canOpenURL(link);
-      if (!ok) {
-        Alert.alert("Cannot open link", "Your phone can't open this WhatsApp link.");
-        return;
-      }
+      if (!ok) { Alert.alert("Cannot open", "Your phone can't open this WhatsApp link."); return; }
       await Linking.openURL(link);
-    } catch {
-      Alert.alert("Error", "Failed to open WhatsApp link.");
-    }
+    } catch { Alert.alert("Error", "Failed to open WhatsApp link."); }
   }
 
-  function StatusChip({ status }: { status: EnrollmentStatus }) {
-    const isApproved = status === "APPROVED";
-    const isPending = status === "PENDING";
-    const isRejected = status === "REJECTED";
-
+  if (loading) {
     return (
-      <View
-        style={[
-          styles.chip,
-          isApproved && styles.chipApproved,
-          isPending && styles.chipPending,
-          isRejected && styles.chipRejected,
-        ]}
-      >
-        <Text style={styles.chipText}>{statusLabel(status)}</Text>
-      </View>
+      <Screen>
+        <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={{ color: theme.textSub, marginTop: 12, fontSize: 14 }}>Loading sports...</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (error) {
+    return (
+      <Screen>
+        <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+          <Ionicons name="wifi-outline" size={56} color="#EF4444" />
+          <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 16, textAlign: "center" }}>
+            Connection Error
+          </Text>
+          <Text style={{ color: theme.textSub, textAlign: "center", marginTop: 8, lineHeight: 20 }}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            style={{ marginTop: 20, backgroundColor: theme.btnPrimary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12 }}
+            onPress={() => fetchSports()}
+          >
+            <Text style={{ color: theme.btnPrimaryText, fontWeight: "900", fontSize: 15 }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </Screen>
     );
   }
 
@@ -118,124 +126,130 @@ export default function StudentSports() {
     <Screen>
       <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" />
 
-      {loading ? (
-        <ActivityIndicator />
-      ) : (
-        <FlatList
-          data={sports}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          renderItem={({ item }) => {
-            const status = item.enrollment_status || "NOT_REQUESTED";
-            const isBusy = submittingId === item.id;
-
-            const canRequest = status === "NOT_REQUESTED" || status === "REJECTED";
-            const showWhatsApp = status === "APPROVED" && !!item.whatsapp_link;
-
-            return (
-              <View style={styles.card}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.cardTitle}>{item.name}</Text>
-                  <StatusChip status={status} />
-                </View>
-
-                {!!item.venue && <Text style={styles.cardText}>Venue: {item.venue}</Text>}
-                {!!item.schedule_text && (
-                  <Text style={styles.cardText}>Schedule: {item.schedule_text}</Text>
-                )}
-                {!!item.instructor_name && (
-                  <Text style={styles.cardText}>Instructor: {item.instructor_name}</Text>
-                )}
-                {!!item.instructor_email && (
-                  <Text style={styles.cardText}>Email: {item.instructor_email}</Text>
-                )}
-
-                {/* ✅ Request button */}
-                <TouchableOpacity
-                  style={[
-                    styles.btn,
-                    !canRequest && styles.btnDisabled,
-                    isBusy && { opacity: 0.7 },
-                  ]}
-                  onPress={() => requestEnroll(item.id)}
-                  disabled={!canRequest || isBusy}
-                >
-                  <Text style={styles.btnText}>
-                    {isBusy
-                      ? "Requesting..."
-                      : status === "PENDING"
-                      ? "Requested (Pending)"
-                      : status === "APPROVED"
-                      ? "Enrolled (Approved)"
-                      : status === "REJECTED"
-                      ? "Request Again"
-                      : "Request Enroll"}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* ✅ WhatsApp link only after approval */}
-                {showWhatsApp ? (
-                  <TouchableOpacity
-                    style={[styles.btn, styles.btnWhatsApp]}
-                    onPress={() => openWhatsApp(item.whatsapp_link as string)}
-                  >
-                    <Text style={styles.btnText}>Open WhatsApp Group</Text>
-                  </TouchableOpacity>
-                ) : status === "APPROVED" && !item.whatsapp_link ? (
-                  <Text style={styles.smallNote}>
-                    WhatsApp link not added yet by Admin.
-                  </Text>
-                ) : null}
-              </View>
-            );
-          }}
-          ListEmptyComponent={
-            <Text style={{ color: "#A7B0BE", textAlign: "center", marginTop: 30 }}>
-              No sports available yet
+      <FlatList
+        data={sports}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ paddingBottom: 28 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+          />
+        }
+        ListEmptyComponent={
+          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 24 }}>
+            <Ionicons name="basketball-outline" size={56} color={theme.border} />
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 16 }}>No Sports Available</Text>
+            <Text style={{ color: theme.textSub, textAlign: "center", marginTop: 8 }}>
+              No sports have been added yet. Check back soon.
             </Text>
-          }
-        />
-      )}
+          </View>
+        }
+        renderItem={({ item }) => {
+          const status = (item.enrollment_status as EnrollmentStatus) || "NOT_REQUESTED";
+          const isBusy = submittingId === item.id;
+          const canRequest = status === "NOT_REQUESTED" || status === "REJECTED";
+          const showWhatsApp = status === "APPROVED" && !!item.whatsapp_link;
+          const chip = STATUS_CONFIG[status] ?? STATUS_CONFIG.NOT_REQUESTED;
+
+          return (
+            <View style={{ backgroundColor: theme.bgCard, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: theme.border }}>
+
+              {/* Title + status chip */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <Text style={{ color: theme.text, fontSize: 17, fontWeight: "900", flex: 1, paddingRight: 8 }}>
+                  {item.name}
+                </Text>
+                <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: chip.bg }}>
+                  <Text style={{ color: chip.text, fontWeight: "800", fontSize: 12 }}>{chip.label}</Text>
+                </View>
+              </View>
+
+              {/* Details */}
+              {!!item.venue && (
+                <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                  <Ionicons name="location-outline" size={13} color={theme.textMuted} />
+                  <Text style={{ color: theme.textSub, fontSize: 13 }}>{item.venue}</Text>
+                </View>
+              )}
+              {!!item.schedule_text && (
+                <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                  <Ionicons name="calendar-outline" size={13} color={theme.textMuted} />
+                  <Text style={{ color: theme.textSub, fontSize: 13 }}>{item.schedule_text}</Text>
+                </View>
+              )}
+              {!!item.instructor_name && (
+                <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                  <Ionicons name="person-outline" size={13} color={theme.textMuted} />
+                  <Text style={{ color: theme.textSub, fontSize: 13 }}>{item.instructor_name}</Text>
+                </View>
+              )}
+              {!!item.instructor_email && (
+                <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                  <Ionicons name="mail-outline" size={13} color={theme.textMuted} />
+                  <Text style={{ color: theme.textSub, fontSize: 13 }}>{item.instructor_email}</Text>
+                </View>
+              )}
+
+              {/* Separator */}
+              <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 10 }} />
+
+              {/* Enroll button */}
+              <TouchableOpacity
+                style={[
+                  { padding: 12, borderRadius: 12, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 },
+                  canRequest
+                    ? { backgroundColor: theme.btnPrimary }
+                    : { backgroundColor: theme.bgInput, borderWidth: 1, borderColor: theme.border },
+                  isBusy && { opacity: 0.6 },
+                ]}
+                onPress={() => canRequest && requestEnroll(item.id)}
+                disabled={!canRequest || isBusy}
+              >
+                {isBusy ? (
+                  <ActivityIndicator size="small" color={theme.accent} />
+                ) : (
+                  <Ionicons
+                    name={
+                      status === "APPROVED" ? "checkmark-circle" :
+                      status === "PENDING"  ? "time-outline" :
+                      status === "REJECTED" ? "refresh-circle-outline" :
+                      "add-circle-outline"
+                    }
+                    size={18}
+                    color={canRequest ? theme.btnPrimaryText : theme.textMuted}
+                  />
+                )}
+                <Text style={{ fontWeight: "900", color: canRequest ? theme.btnPrimaryText : theme.textMuted }}>
+                  {isBusy        ? "Requesting..." :
+                   status === "PENDING"  ? "Requested (Pending)" :
+                   status === "APPROVED" ? "Enrolled ✓" :
+                   status === "REJECTED" ? "Request Again" :
+                   "Request Enrollment"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* WhatsApp */}
+              {showWhatsApp && (
+                <TouchableOpacity
+                  style={{ marginTop: 10, backgroundColor: "#25D366", padding: 12, borderRadius: 12, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
+                  onPress={() => openWhatsApp(item.whatsapp_link as string)}
+                >
+                  <Ionicons name="logo-whatsapp" size={16} color="white" />
+                  <Text style={{ fontWeight: "900", color: "white" }}>Open WhatsApp Group</Text>
+                </TouchableOpacity>
+              )}
+              {status === "APPROVED" && !item.whatsapp_link && (
+                <Text style={{ color: theme.textMuted, marginTop: 10, fontSize: 12 }}>
+                  WhatsApp link not added yet by Admin.
+                </Text>
+              )}
+            </View>
+          );
+        }}
+      />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B0F14", padding: 20 },
-
-  card: {
-    backgroundColor: "#121826",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#263041",
-  },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  cardTitle: { color: "white", fontSize: 18, fontWeight: "900", flex: 1, paddingRight: 10 },
-  cardText: { color: "#A7B0BE", marginTop: 6 },
-
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#1F2937",
-  },
-  chipApproved: { backgroundColor: "#1B4332" },
-  chipPending: { backgroundColor: "#3B2F1A" },
-  chipRejected: { backgroundColor: "#4A1C1C" },
-  chipText: { color: "white", fontWeight: "800", fontSize: 12 },
-
-  btn: {
-    marginTop: 12,
-    backgroundColor: "#D4AF37",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  btnDisabled: { backgroundColor: "#2C3442" },
-  btnWhatsApp: { marginTop: 10 },
-
-  btnText: { fontWeight: "900", color: "#111827" },
-  smallNote: { color: "#A7B0BE", marginTop: 10, fontSize: 12 },
-});

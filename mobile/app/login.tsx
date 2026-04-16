@@ -4,14 +4,16 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  StatusBar,
 } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { apiPost } from "../lib/api";
 import { saveAuth } from "../lib/authStore";
+import { useAppTheme } from "../lib/themeStore";
 
 type LoginResponse = {
   token: string;
@@ -20,6 +22,7 @@ type LoginResponse = {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { theme, isDark } = useAppTheme();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,23 +32,11 @@ export default function LoginScreen() {
   async function onLogin() {
     const em = email.trim().toLowerCase();
     const pw = password;
-
-    if (!em || !pw) {
-      Alert.alert("Missing fields", "Please enter email and password.");
-      return;
-    }
-
+    if (!em || !pw) { Alert.alert("Missing fields", "Please enter email and password."); return; }
     try {
       setLoading(true);
-
-      const data = await apiPost<LoginResponse>("/api/auth/login", {
-        email: em,
-        password: pw,
-      });
-
+      const data = await apiPost<LoginResponse>("/api/auth/login", { email: em, password: pw });
       await saveAuth(data.token, data.user.role, data.user.fullName, data.user.email);
-
-      // Replace current screen — this resets the stack cleanly
       if (data.user.role === "STUDENT") router.replace("/studentHome" as Href);
       else if (data.user.role === "ADMIN") router.replace("/adminHome" as Href);
       else router.replace("/advisoryHome" as Href);
@@ -57,87 +48,89 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
-      <Text style={styles.sub}>Use your system-provided account</Text>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.bg }}
+      contentContainerStyle={{ flexGrow: 1, padding: 22, justifyContent: "center" }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.bg} />
 
-      <Text style={styles.label}>Email</Text>
+      <Text style={{ color: theme.text, fontSize: 34, fontWeight: "900" }}>Login</Text>
+      <Text style={{ color: theme.textSub, marginTop: 6, marginBottom: 18 }}>
+        Use your system-provided account
+      </Text>
+
+      <Text style={{ color: theme.text, marginTop: 10, marginBottom: 6, fontWeight: "700" }}>Email</Text>
       <TextInput
-        style={styles.input}
+        style={{
+          backgroundColor: theme.bgInput,
+          borderWidth: 1,
+          borderColor: theme.border,
+          color: theme.text,
+          paddingVertical: 12,
+          paddingHorizontal: 14,
+          borderRadius: 14,
+        }}
         placeholder="name@domain.com"
-        placeholderTextColor="#667085"
+        placeholderTextColor={theme.textMuted}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
       />
 
-      <Text style={styles.label}>Password</Text>
-
-      <View style={styles.pwRow}>
+      <Text style={{ color: theme.text, marginTop: 10, marginBottom: 6, fontWeight: "700" }}>Password</Text>
+      <View style={{ position: "relative" }}>
         <TextInput
-          style={[styles.input, styles.pwInput]}
+          style={{
+            backgroundColor: theme.bgInput,
+            borderWidth: 1,
+            borderColor: theme.border,
+            color: theme.text,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            paddingRight: 44,
+            borderRadius: 14,
+          }}
           placeholder="Your password"
-          placeholderTextColor="#667085"
+          placeholderTextColor={theme.textMuted}
           secureTextEntry={!showPw}
           value={password}
           onChangeText={setPassword}
         />
-
-        <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPw((v) => !v)}>
-          <Ionicons name={showPw ? "eye-off" : "eye"} size={20} color="#98A2B3" />
+        <TouchableOpacity
+          style={{ position: "absolute", right: 12, top: 12, height: 24, width: 24, alignItems: "center", justifyContent: "center" }}
+          onPress={() => setShowPw((v) => !v)}
+        >
+          <Ionicons name={showPw ? "eye-off" : "eye"} size={20} color={theme.textSub} />
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.primaryBtn} onPress={onLogin} disabled={loading}>
-        {loading ? <ActivityIndicator /> : <Text style={styles.primaryBtnText}>Login</Text>}
+      <TouchableOpacity
+        style={{
+          marginTop: 18,
+          backgroundColor: theme.btnPrimary,
+          paddingVertical: 14,
+          borderRadius: 999,
+          alignItems: "center",
+        }}
+        onPress={onLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color={theme.btnPrimaryText} />
+        ) : (
+          <Text style={{ fontWeight: "800", fontSize: 16, color: theme.btnPrimaryText }}>Login</Text>
+        )}
       </TouchableOpacity>
 
-      {/* Forgot Password */}
-      <TouchableOpacity onPress={() => router.push("/forgotPassword" as Href)}>
-        <Text style={styles.link}>Forgot password?</Text>
+      <TouchableOpacity onPress={() => router.push("/forgotPassword" as Href)} style={{ marginTop: 14 }}>
+        <Text style={{ color: theme.accent, fontWeight: "700", textAlign: "center" }}>Forgot password?</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => router.replace("/" as Href)}>
-        <Text style={styles.back}>Back</Text>
+      <TouchableOpacity onPress={() => router.replace("/" as Href)} style={{ marginTop: 10 }}>
+        <Text style={{ color: theme.textSub, textAlign: "center" }}>Back</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B0F14", padding: 22, justifyContent: "center" },
-  title: { color: "white", fontSize: 34, fontWeight: "900" },
-  sub: { color: "#98A2B3", marginTop: 6, marginBottom: 18 },
-  label: { color: "#E4E7EC", marginTop: 10, marginBottom: 6, fontWeight: "700" },
-  input: {
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#1F2937",
-    color: "white",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-  },
-  pwRow: { position: "relative" },
-  pwInput: { paddingRight: 44 },
-  eyeBtn: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-    height: 24,
-    width: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryBtn: {
-    marginTop: 18,
-    backgroundColor: "#C9A227",
-    paddingVertical: 14,
-    borderRadius: 999,
-    alignItems: "center",
-  },
-  primaryBtnText: { fontWeight: "800", fontSize: 16, color: "#111827" },
-  link: { marginTop: 14, color: "#C9A227", fontWeight: "700", textAlign: "center" },
-  back: { marginTop: 10, color: "#98A2B3", textAlign: "center" },
-});

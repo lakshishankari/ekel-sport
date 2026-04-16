@@ -1,190 +1,90 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import React from "react";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Screen from "../components/Screen";
 import AppHeader from "../components/AppHeader";
 import AppCard from "../components/AppCard";
+import { useAppTheme } from "../lib/themeStore";
 
-type AttendanceSession = {
-    id: string;
-    sport: string;
-    date: string;
-    location: string;
-    attendees: number;
-    total: number;
-};
+type AttendanceSession = { id: string; sport: string; date: string; location: string; attendees: number; total: number };
+
+const MOCK: AttendanceSession[] = [
+  { id: "1", sport: "Cricket",    date: "2026-01-27", location: "Main Ground",  attendees: 18, total: 22 },
+  { id: "2", sport: "Basketball", date: "2026-01-26", location: "Indoor Court", attendees: 15, total: 15 },
+];
 
 export default function AdminAttendanceList() {
-    const [sessions] = useState<AttendanceSession[]>([
-        {
-            id: "1",
-            sport: "Cricket",
-            date: "2026-01-27",
-            location: "Main Ground",
-            attendees: 18,
-            total: 22,
-        },
-        {
-            id: "2",
-            sport: "Basketball",
-            date: "2026-01-26",
-            location: "Indoor Court",
-            attendees: 15,
-            total: 15,
-        },
-    ]);
+  const { theme } = useAppTheme();
 
-    const getAttendanceRate = (attendees: number, total: number) => {
-        return Math.round((attendees / total) * 100);
-    };
+  const getColor = (pct: number) => pct >= 80 ? "#10B981" : pct >= 60 ? "#F59E0B" : "#EF4444";
 
-    return (
-        <Screen>
-            <ScrollView showsVerticalScrollIndicator={false}>
-                <AppHeader
-                    title="Attendance Sessions"
-                    subtitle="View all sessions"
-                    rightSlot={
-                        <Pressable style={styles.addBtn}>
-                            <Ionicons name="add-circle" size={28} color="#C9A227" />
-                        </Pressable>
-                    }
-                />
+  return (
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <AppHeader
+          title="Attendance Sessions"
+          subtitle="View all sessions"
+          rightSlot={
+            <Pressable style={{ padding: 6 }}>
+              <Ionicons name="add-circle" size={28} color={theme.accent} />
+            </Pressable>
+          }
+        />
 
-                <View style={{ marginTop: 14 }}>
-                    {sessions.map((session) => {
-                        const rate = getAttendanceRate(session.attendees, session.total);
-                        return (
-                            <AppCard key={session.id} style={{ marginTop: 12 }}>
-                                <View style={styles.sessionHeader}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.sport}>{session.sport}</Text>
-                                        <View style={styles.dateRow}>
-                                            <Ionicons name="calendar-outline" size={14} color="#A7B0BE" />
-                                            <Text style={styles.date}>{session.date}</Text>
-                                        </View>
-                                    </View>
-
-                                    <View style={styles.rateBadge}>
-                                        <Text style={styles.rateText}>{rate}%</Text>
-                                    </View>
-                                </View>
-
-                                <View style={styles.details}>
-                                    <View style={styles.detailItem}>
-                                        <Ionicons name="location-outline" size={16} color="#A7B0BE" />
-                                        <Text style={styles.detailText}>{session.location}</Text>
-                                    </View>
-
-                                    <View style={styles.detailItem}>
-                                        <Ionicons name="people-outline" size={16} color="#A7B0BE" />
-                                        <Text style={styles.detailText}>
-                                            {session.attendees} / {session.total} students
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                <Pressable style={styles.viewBtn}>
-                                    <Text style={styles.viewBtnText}>View Attendees</Text>
-                                    <Ionicons name="chevron-forward" size={16} color="#C9A227" />
-                                </Pressable>
-                            </AppCard>
-                        );
-                    })}
-
-                    {sessions.length === 0 && (
-                        <View style={styles.emptyState}>
-                            <Ionicons name="clipboard-outline" size={48} color="#A7B0BE" />
-                            <Text style={styles.emptyText}>No sessions yet</Text>
-                            <Text style={styles.emptyHint}>Create a session to get started</Text>
-                        </View>
-                    )}
+        <View style={{ marginTop: 14 }}>
+          {MOCK.length === 0 ? (
+            <View style={{ alignItems: "center", paddingVertical: 60 }}>
+              <Ionicons name="clipboard-outline" size={48} color={theme.border} />
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700", marginTop: 12 }}>No sessions yet</Text>
+              <Text style={{ color: theme.textSub, fontSize: 14, fontWeight: "600", marginTop: 6 }}>Create a session to get started</Text>
+            </View>
+          ) : MOCK.map((session) => {
+            const rate = Math.round((session.attendees / session.total) * 100);
+            const color = getColor(rate);
+            return (
+              <AppCard key={session.id} style={{ marginTop: 12 }}>
+                {/* Header row */}
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontSize: 17, fontWeight: "800" }}>{session.sport}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                      <Ionicons name="calendar-outline" size={14} color={theme.textMuted} />
+                      <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "600" }}>{session.date}</Text>
+                    </View>
+                  </View>
+                  <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: color + "22" }}>
+                    <Text style={{ color, fontSize: 16, fontWeight: "900" }}>{rate}%</Text>
+                  </View>
                 </View>
-            </ScrollView>
-        </Screen>
-    );
-}
 
-const styles = StyleSheet.create({
-    addBtn: {
-        padding: 4,
-    },
-    sessionHeader: {
-        flexDirection: "row",
-        alignItems: "flex-start",
-        gap: 12,
-        marginBottom: 12,
-    },
-    sport: {
-        color: "#F9FAFB",
-        fontSize: 17,
-        fontWeight: "800",
-    },
-    dateRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        marginTop: 4,
-    },
-    date: {
-        color: "#A7B0BE",
-        fontSize: 13,
-        fontWeight: "600",
-    },
-    rateBadge: {
-        backgroundColor: "rgba(201,162,39,0.15)",
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 10,
-    },
-    rateText: {
-        color: "#C9A227",
-        fontSize: 16,
-        fontWeight: "900",
-    },
-    details: {
-        gap: 8,
-        paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: "rgba(255,255,255,0.05)",
-    },
-    detailItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    detailText: {
-        color: "rgba(229,231,235,0.75)",
-        fontSize: 14,
-        fontWeight: "600",
-    },
-    viewBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        marginTop: 12,
-        padding: 10,
-    },
-    viewBtnText: {
-        color: "#C9A227",
-        fontSize: 14,
-        fontWeight: "700",
-    },
-    emptyState: {
-        alignItems: "center",
-        paddingVertical: 60,
-    },
-    emptyText: {
-        color: "#F9FAFB",
-        fontSize: 16,
-        fontWeight: "700",
-        marginTop: 12,
-    },
-    emptyHint: {
-        color: "#A7B0BE",
-        fontSize: 14,
-        fontWeight: "600",
-        marginTop: 6,
-    },
-});
+                {/* Details */}
+                <View style={{ gap: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="location-outline" size={16} color={theme.textMuted} />
+                    <Text style={{ color: theme.textSub, fontSize: 14, fontWeight: "600" }}>{session.location}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="people-outline" size={16} color={theme.textMuted} />
+                    <Text style={{ color: theme.textSub, fontSize: 14, fontWeight: "600" }}>{session.attendees} / {session.total} students</Text>
+                  </View>
+                </View>
+
+                {/* Progress bar */}
+                <View style={{ height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: "hidden", marginTop: 10, marginBottom: 2 }}>
+                  <View style={{ width: `${rate}%` as any, height: "100%", borderRadius: 2, backgroundColor: color }} />
+                </View>
+
+                <Pressable style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 12, padding: 10 }}>
+                  <Text style={{ color: theme.accent, fontSize: 14, fontWeight: "700" }}>View Attendees</Text>
+                  <Ionicons name="chevron-forward" size={16} color={theme.accent} />
+                </Pressable>
+              </AppCard>
+            );
+          })}
+        </View>
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
+    </Screen>
+  );
+}

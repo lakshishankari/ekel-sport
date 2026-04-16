@@ -1,6 +1,7 @@
 import { Stack, usePathname } from "expo-router";
 import { useEffect } from "react";
 import { BackHandler } from "react-native";
+import { ThemeProvider } from "../lib/themeStore";
 
 export default function RootLayout() {
   const pathname = usePathname();
@@ -23,7 +24,8 @@ export default function RootLayout() {
   }, [pathname]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <ThemeProvider>
+      <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
@@ -78,6 +80,7 @@ export default function RootLayout() {
 
       {/* Keep modal if exists */}
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-    </Stack>
+      </Stack>
+    </ThemeProvider>
   );
 }

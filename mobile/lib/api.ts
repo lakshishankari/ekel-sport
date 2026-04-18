@@ -127,3 +127,62 @@ export async function apiGet<T>(path: string, token?: string): Promise<T> {
     clearTimeout(timer);
   }
 }
+
+export async function apiPut<T>(
+  path: string,
+  body: unknown,
+  token?: string
+): Promise<T> {
+  const finalToken = normalizeToken(await getToken(token));
+  const url = buildUrl(path);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, {
+      method: "PUT",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    const data: any = await parseResponse(res);
+    if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
+    return data as T;
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error(`Request timed out at ${url}`);
+    if (err instanceof TypeError) throw new Error(`Network error — could not reach server at ${url}.`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function apiDelete<T>(
+  path: string,
+  token?: string
+): Promise<T> {
+  const finalToken = normalizeToken(await getToken(token));
+  const url = buildUrl(path);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, {
+      method: "DELETE",
+      signal: controller.signal,
+      headers: {
+        ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
+      },
+    });
+    const data: any = await parseResponse(res);
+    if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
+    return data as T;
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error(`Request timed out.`);
+    if (err instanceof TypeError) throw new Error(`Network error — could not reach server at ${url}.`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}

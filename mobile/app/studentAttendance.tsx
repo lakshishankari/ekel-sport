@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { loadAuth } from "../lib/authStore";
-import Screen from "../components/Screen";
+import { apiGet } from "../lib/api";
+import StudentScreen from "../components/StudentScreen";
 import AppHeader from "../components/AppHeader";
 import { useAppTheme } from "../lib/themeStore";
 
@@ -17,40 +18,84 @@ interface SportAttendance {
 export default function StudentAttendance() {
   const { theme } = useAppTheme();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [attendanceData, setAttendanceData] = useState<SportAttendance[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
+  const fetchAttendance = useCallback(async (isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoading(true);
+      setError(null);
       const { token, role } = await loadAuth();
       if (!token || role !== "STUDENT") { router.replace("/login"); return; }
-      setTimeout(() => {
-        setAttendanceData([
-          { sport_id: 1, sport_name: "Basketball", days_attended: 12, total_sessions: 15 },
-          { sport_id: 2, sport_name: "Football",   days_attended: 8,  total_sessions: 10 },
-          { sport_id: 3, sport_name: "Cricket",    days_attended: 5,  total_sessions: 8  },
-        ]);
-        setLoading(false);
-      }, 800);
-    })();
+      const data = await apiGet<SportAttendance[]>("/api/student/attendance", token);
+      setAttendanceData(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load attendance");
+      setAttendanceData([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchAttendance(true); }, [fetchAttendance]);
 
   const getColor = (pct: number) => pct >= 80 ? "#10B981" : pct >= 60 ? "#F59E0B" : "#EF4444";
 
   return (
-    <Screen>
-      <AppHeader title="My Attendance" subtitle="Track your sports attendance" />
-      <ScrollView contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}>
-        {loading ? (
+    <StudentScreen activeRoute="/studentAttendance">
+      {/* Header row with scan button */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={{ flex: 1 }}>
+          <AppHeader title="My Attendance" subtitle="Track your sports attendance" />
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push("/studentScanAttendance")}
+          style={{
+            marginRight: 16,
+            marginTop: 4,
+            width: 48,
+            height: 48,
+            borderRadius: 14,
+            backgroundColor: theme.accent + "22",
+            borderWidth: 1,
+            borderColor: theme.accent + "55",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="qr-code-outline" size={26} color={theme.accent} />
+        </TouchableOpacity>
+      </View>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} colors={[theme.accent]} />}
+      >
+        {loading && !refreshing ? (
           <View style={{ alignItems: "center", paddingTop: 60 }}>
             <ActivityIndicator size="large" color={theme.accent} />
             <Text style={{ color: theme.textSub, marginTop: 12, fontSize: 14 }}>Loading attendance data...</Text>
           </View>
+        ) : error ? (
+          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 24 }}>
+            <Ionicons name="wifi-outline" size={56} color="#EF4444" />
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 16, textAlign: "center" }}>Connection Error</Text>
+            <Text style={{ color: theme.textSub, textAlign: "center", marginTop: 8, lineHeight: 20 }}>{error}</Text>
+            <TouchableOpacity
+              style={{ marginTop: 20, backgroundColor: theme.btnPrimary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12 }}
+              onPress={() => fetchAttendance()}
+            >
+              <Text style={{ color: theme.btnPrimaryText, fontWeight: "900", fontSize: 15 }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : attendanceData.length === 0 ? (
           <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 24 }}>
             <Ionicons name="calendar-outline" size={64} color={theme.border} />
-            <Text style={{ color: theme.text, fontSize: 20, fontWeight: "900", marginTop: 16 }}>No Attendance Records</Text>
+            <Text style={{ color: theme.text, fontSize: 20, fontWeight: "900", marginTop: 16 }}>No Attendance Yet</Text>
             <Text style={{ color: theme.textSub, textAlign: "center", marginTop: 8, fontSize: 14, lineHeight: 20 }}>
-              Your attendance records will appear here once you start attending sports sessions.
+              Attend QR-scanned training sessions to see your attendance records here.
             </Text>
           </View>
         ) : (
@@ -112,6 +157,6 @@ export default function StudentAttendance() {
           </>
         )}
       </ScrollView>
-    </Screen>
+    </StudentScreen>
   );
 }

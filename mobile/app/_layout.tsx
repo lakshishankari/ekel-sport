@@ -70,6 +70,7 @@ export default function RootLayout() {
       <Stack.Screen name="adminDisplayQR" />
       <Stack.Screen name="adminAttendanceList" />
       <Stack.Screen name="adminAnnouncements" />
+      <Stack.Screen name="adminProfile" />
 
       {/* Advisory */}
       <Stack.Screen name="createAdvisory" />

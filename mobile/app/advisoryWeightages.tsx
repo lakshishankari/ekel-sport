@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import Screen from "../components/Screen";
 import { loadAuth } from "../lib/authStore";
 import { apiGet, apiPost } from "../lib/api";
+import { useAppTheme, AppTheme } from "../lib/themeStore";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Criteria = {
@@ -33,7 +34,7 @@ type Sport = {
   criteria: Criteria[];
 };
 
-// ─── Mock Data ───────────────────────────────────────────────────────────────
+// ─── Default Criteria ────────────────────────────────────────────────────────
 const DEFAULT_CRITERIA = (): Criteria[] => [
   {
     id: "match",
@@ -69,16 +70,16 @@ const DEFAULT_CRITERIA = (): Criteria[] => [
   },
 ];
 
-
-
-
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AdvisoryWeightages() {
+  const { theme, isDark } = useAppTheme();
   const [sports,        setSports]        = useState<Sport[]>([]);
   const [activeSportId, setActiveSportId] = useState<string>("");
   const [saving,        setSaving]        = useState(false);
   const [loadingSports, setLoadingSports] = useState(true);
   const [savedSportIds, setSavedSportIds] = useState<Set<string>>(new Set());
+
+  const styles = makeStyles(theme);
 
   // ── Auth guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -97,6 +98,7 @@ export default function AdvisoryWeightages() {
         Cricket: "🏏", Football: "⚽", Basketball: "🏀",
         Volleyball: "🏐", Hockey: "🏑", Rugby: "🏉",
         Tennis: "🎾", Badminton: "🏸", Swimming: "🏊",
+        Athletics: "🏃", Netball: "🏀", Chess: "♟️",
       };
       const built: Sport[] = await Promise.all(
         apiSports.map(async (sp) => {
@@ -132,7 +134,7 @@ export default function AdvisoryWeightages() {
       <Screen>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-            <Ionicons name="chevron-back" size={24} color="#F9FAFB" />
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Criteria Weightages</Text>
@@ -140,7 +142,7 @@ export default function AdvisoryWeightages() {
           </View>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color="#C9A227" />
+          <ActivityIndicator size="large" color={theme.accent} />
         </View>
       </Screen>
     );
@@ -151,15 +153,15 @@ export default function AdvisoryWeightages() {
       <Screen>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-            <Ionicons name="chevron-back" size={24} color="#F9FAFB" />
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Criteria Weightages</Text>
           </View>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
-          <Ionicons name="alert-circle-outline" size={40} color="#4B5563" />
-          <Text style={{ color: "#6B7280", fontSize: 15, fontWeight: "700", marginTop: 12, textAlign: "center" }}>
+          <Ionicons name="alert-circle-outline" size={40} color={theme.textMuted} />
+          <Text style={{ color: theme.textSub, fontSize: 15, fontWeight: "700", marginTop: 12, textAlign: "center" }}>
             No sports found. Ask an admin to create sports first.
           </Text>
         </View>
@@ -171,20 +173,13 @@ export default function AdvisoryWeightages() {
   const totalWeight = activeSport.criteria.reduce((sum, c) => sum + c.weight, 0);
   const isValid = totalWeight === 100;
 
-  // Update a single criterion weight
   const updateWeight = (criteriaId: string, raw: string) => {
     const parsed = parseInt(raw.replace(/[^0-9]/g, ""), 10);
     const value = isNaN(parsed) ? 0 : Math.min(100, Math.max(0, parsed));
-
     setSports((prev) =>
       prev.map((s) => {
         if (s.id !== activeSport.id) return s;
-        return {
-          ...s,
-          criteria: s.criteria.map((c) =>
-            c.id === criteriaId ? { ...c, weight: value } : c
-          ),
-        };
+        return { ...s, criteria: s.criteria.map((c) => c.id === criteriaId ? { ...c, weight: value } : c) };
       })
     );
     setSavedSportIds((prev) => { const n = new Set(prev); n.delete(activeSport.id); return n; });
@@ -197,10 +192,7 @@ export default function AdvisoryWeightages() {
   };
 
   const handleSave = async () => {
-    if (!isValid) {
-      Alert.alert("Invalid Weightages", "The criteria weights must add up to exactly 100%.");
-      return;
-    }
+    if (!isValid) { Alert.alert("Invalid Weightages", "The criteria weights must add up to exactly 100%."); return; }
     setSaving(true);
     try {
       await apiPost(`/api/advisory/weightages/${activeSport.id}`, {
@@ -219,30 +211,23 @@ export default function AdvisoryWeightages() {
     }
   };
 
-  // Distribute remaining so total == 100
   const autoBalance = () => {
     const each = Math.floor(100 / activeSport.criteria.length);
     const remainder = 100 - each * activeSport.criteria.length;
     setSports((prev) =>
       prev.map((s) => {
         if (s.id !== activeSport.id) return s;
-        return {
-          ...s,
-          criteria: s.criteria.map((c, i) => ({
-            ...c,
-            weight: each + (i === 0 ? remainder : 0),
-          })),
-        };
+        return { ...s, criteria: s.criteria.map((c, i) => ({ ...c, weight: each + (i === 0 ? remainder : 0) })) };
       })
     );
   };
 
   return (
-    <Screen>
+    <Screen style={{ paddingHorizontal: 0, paddingTop: 0 }}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-          <Ionicons name="chevron-back" size={24} color="#F9FAFB" />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Criteria Weightages</Text>
@@ -258,7 +243,7 @@ export default function AdvisoryWeightages() {
       >
         {sports.map((s) => {
           const active = s.id === activeSportId;
-          const saved = savedSportIds.has(s.id);
+          const saved  = savedSportIds.has(s.id);
           return (
             <Pressable
               key={s.id}
@@ -301,7 +286,7 @@ export default function AdvisoryWeightages() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Criteria Weights</Text>
             <Pressable onPress={autoBalance} style={styles.balanceBtn}>
-              <Ionicons name="shuffle" size={14} color="#C9A227" />
+              <Ionicons name="shuffle" size={14} color={theme.accent} />
               <Text style={styles.balanceBtnText}>Auto-balance</Text>
             </Pressable>
           </View>
@@ -333,12 +318,7 @@ export default function AdvisoryWeightages() {
 
                 {/* Progress bar */}
                 <View style={styles.progressBg}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${pct}%` as any, backgroundColor: c.accentColor },
-                    ]}
-                  />
+                  <View style={[styles.progressFill, { width: `${pct}%` as any, backgroundColor: c.accentColor }]} />
                 </View>
               </View>
             );
@@ -375,10 +355,8 @@ export default function AdvisoryWeightages() {
           <View style={styles.formulaBox}>
             {activeSport.criteria.map((c, i) => (
               <Text key={c.id} style={styles.formulaLine}>
-                <Text style={{ color: c.accentColor, fontWeight: "800" }}>
-                  {c.label}
-                </Text>
-                <Text style={{ color: "rgba(229,231,235,0.55)" }}>
+                <Text style={{ color: c.accentColor, fontWeight: "800" }}>{c.label}</Text>
+                <Text style={{ color: theme.textSub }}>
                   {" "}× {c.weight}%{i < activeSport.criteria.length - 1 ? " +" : ""}
                 </Text>
               </Text>
@@ -393,9 +371,9 @@ export default function AdvisoryWeightages() {
           disabled={!isValid || saving}
         >
           {saving ? (
-            <ActivityIndicator color="#0B0F14" size="small" />
+            <ActivityIndicator color={theme.btnPrimaryText} size="small" />
           ) : (
-            <Ionicons name="save" size={20} color="#0B0F14" />
+            <Ionicons name="save" size={20} color={theme.btnPrimaryText} />
           )}
           <Text style={styles.saveBtnText}>
             {saving ? "Saving..." : `Save ${activeSport.name} Weightages`}
@@ -406,7 +384,8 @@ export default function AdvisoryWeightages() {
   );
 }
 
-const styles = StyleSheet.create({
+// ─── Styles ──────────────────────────────────────────────────────────────────
+const makeStyles = (theme: AppTheme) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -415,11 +394,10 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
-  backBtn: { padding: 4, marginTop: 2 },
-  headerTitle: { color: "#F9FAFB", fontSize: 22, fontWeight: "900" },
-  headerSub: { color: "rgba(229,231,235,0.5)", fontSize: 12, fontWeight: "600", marginTop: 3, lineHeight: 16 },
+  backBtn:    { padding: 4, marginTop: 2 },
+  headerTitle: { color: theme.text, fontSize: 22, fontWeight: "900" },
+  headerSub:   { color: theme.textMuted, fontSize: 12, fontWeight: "600", marginTop: 3, lineHeight: 16 },
 
-  /* Sport tabs */
   sportTabs: { paddingHorizontal: 20, gap: 10, paddingBottom: 4 },
   sportTab: {
     flexDirection: "row",
@@ -428,19 +406,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: theme.bgInput,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: theme.border,
   },
-  sportTabActive: {
-    backgroundColor: "rgba(201,162,39,0.15)",
-    borderColor: "#C9A227",
-  },
-  sportEmoji: { fontSize: 16 },
-  sportTabText: { color: "#A7B0BE", fontSize: 13, fontWeight: "700" },
-  sportTabTextActive: { color: "#C9A227" },
+  sportTabActive: { backgroundColor: theme.accent + "26", borderColor: theme.accent },
+  sportEmoji:     { fontSize: 16 },
+  sportTabText:       { color: theme.textSub, fontSize: 13, fontWeight: "700" },
+  sportTabTextActive: { color: theme.accent },
 
-  /* Total banner */
   totalBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -448,37 +422,29 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 18,
     padding: 14,
-    backgroundColor: "rgba(18,24,38,0.9)",
+    backgroundColor: theme.bgCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: theme.border,
   },
-  totalLeft: { gap: 2 },
-  totalLabel: { color: "#F9FAFB", fontSize: 15, fontWeight: "800" },
-  totalSub: { color: "rgba(229,231,235,0.45)", fontSize: 11, fontWeight: "600" },
-  totalBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  validBadge: { backgroundColor: "rgba(16,185,129,0.12)" },
+  totalLeft:  { gap: 2 },
+  totalLabel: { color: theme.text, fontSize: 15, fontWeight: "800" },
+  totalSub:   { color: theme.textMuted, fontSize: 11, fontWeight: "600" },
+  totalBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  validBadge:   { backgroundColor: "rgba(16,185,129,0.12)" },
   invalidBadge: { backgroundColor: "rgba(239,68,68,0.12)" },
-  totalNum: { fontSize: 18, fontWeight: "900" },
-  validText: { color: "#10B981" },
+  totalNum:    { fontSize: 18, fontWeight: "900" },
+  validText:   { color: "#10B981" },
   invalidText: { color: "#EF4444" },
 
-  /* Section */
   section: {
     marginHorizontal: 20,
     marginTop: 18,
-    backgroundColor: "rgba(18,24,38,0.85)",
+    backgroundColor: theme.bgCard,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: theme.border,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -486,64 +452,50 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 14,
   },
-  sectionTitle: { color: "#F9FAFB", fontSize: 16, fontWeight: "900" },
-  sectionSub: {
-    color: "rgba(229,231,235,0.5)",
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 14,
-    lineHeight: 16,
-  },
+  sectionTitle: { color: theme.text, fontSize: 16, fontWeight: "900" },
+  sectionSub:   { color: theme.textSub, fontSize: 12, fontWeight: "600", marginBottom: 14, lineHeight: 16 },
   balanceBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: "rgba(201,162,39,0.1)",
+    backgroundColor: theme.accent + "1A",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(201,162,39,0.25)",
+    borderColor: theme.accent + "40",
   },
-  balanceBtnText: { color: "#C9A227", fontSize: 11, fontWeight: "800" },
+  balanceBtnText: { color: theme.accent, fontSize: 11, fontWeight: "800" },
 
-  /* Criteria card */
   criteriaCard: {
     marginBottom: 14,
-    backgroundColor: "rgba(38,48,65,0.5)",
+    backgroundColor: theme.bgInput,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: theme.border,
     gap: 12,
   },
   criteriaTop: { flexDirection: "row", alignItems: "center", gap: 12 },
-  criteriaIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  criteriaName: { color: "#F9FAFB", fontSize: 14, fontWeight: "800", marginBottom: 2 },
-  criteriaDesc: { color: "rgba(229,231,235,0.5)", fontSize: 11, fontWeight: "600", lineHeight: 15 },
+  criteriaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  criteriaName: { color: theme.text, fontSize: 14, fontWeight: "800", marginBottom: 2 },
+  criteriaDesc: { color: theme.textMuted, fontSize: 11, fontWeight: "600", lineHeight: 15 },
   weightInputWrap: { flexDirection: "row", alignItems: "center", gap: 4 },
   weightInput: {
     width: 52,
-    backgroundColor: "rgba(11,15,20,0.8)",
+    backgroundColor: theme.bg,
     borderRadius: 8,
     borderWidth: 1,
-    color: "#F9FAFB",
+    color: theme.text,
     fontSize: 16,
     fontWeight: "900",
     textAlign: "center",
     paddingVertical: 8,
   },
-  pctSign: { color: "#A7B0BE", fontSize: 14, fontWeight: "700" },
-  progressBg: { height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.07)", overflow: "hidden" },
+  pctSign:     { color: theme.textSub, fontSize: 14, fontWeight: "700" },
+  progressBg:  { height: 5, borderRadius: 3, backgroundColor: theme.border, overflow: "hidden" },
   progressFill: { height: 5, borderRadius: 3 },
 
-  /* Threshold */
   thresholdRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -557,7 +509,7 @@ const styles = StyleSheet.create({
   },
   thresholdInput: {
     width: 58,
-    backgroundColor: "rgba(11,15,20,0.6)",
+    backgroundColor: theme.bg,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(16,185,129,0.4)",
@@ -567,19 +519,19 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: 6,
   },
-  thresholdPct: { color: "rgba(229,231,235,0.6)", fontSize: 13, fontWeight: "700" },
-  thresholdNote: { color: "rgba(229,231,235,0.4)", fontSize: 11, fontWeight: "600", lineHeight: 16 },
+  thresholdPct:  { color: theme.textSub, fontSize: 13, fontWeight: "700" },
+  thresholdNote: { color: theme.textMuted, fontSize: 11, fontWeight: "600", lineHeight: 16 },
 
-  /* Formula */
   formulaBox: {
-    backgroundColor: "rgba(11,15,20,0.6)",
+    backgroundColor: theme.bg,
     borderRadius: 12,
     padding: 14,
     gap: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   formulaLine: { fontSize: 13, fontWeight: "600", lineHeight: 20 },
 
-  /* Save */
   saveBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -589,8 +541,8 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingVertical: 16,
     borderRadius: 16,
-    backgroundColor: "#C9A227",
+    backgroundColor: theme.btnPrimary,
   },
   saveBtnDisabled: { opacity: 0.45 },
-  saveBtnText: { color: "#0B0F14", fontSize: 16, fontWeight: "900" },
+  saveBtnText: { color: theme.btnPrimaryText, fontSize: 16, fontWeight: "900" },
 });

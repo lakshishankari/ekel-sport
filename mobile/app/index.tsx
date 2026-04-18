@@ -158,7 +158,7 @@ export default function IndexScreen() {
         </Text>
 
         <Text style={[styles.sub, { color: theme.textSub }]}>
-          University of Kelaniya official{"\n"}sports management platform
+          University of Kelaniya official sports platform{"\n"}🌍 Open to students worldwide
         </Text>
 
         {/* Divider */}
@@ -189,6 +189,28 @@ export default function IndexScreen() {
         >
           <Text style={[styles.outlineBtnText, { color: theme.accent }]}>
             Student Register
+          </Text>
+        </TouchableOpacity>
+
+        {/* Guest login */}
+        <TouchableOpacity
+          style={[
+            styles.outlineBtn,
+            {
+              borderColor: theme.border,
+              backgroundColor: "transparent",
+              marginBottom: 20,
+              flexDirection: "row",
+              gap: 8,
+              justifyContent: "center",
+              alignItems: "center",
+            },
+          ]}
+          onPress={() => router.push("/guestPortal" as Href)}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.outlineBtnText, { color: theme.textSub, fontSize: 14 }]}>
+            🌍  Browse as Guest
           </Text>
         </TouchableOpacity>
 

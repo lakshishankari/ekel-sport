@@ -7,7 +7,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { apiGet } from "../lib/api";
 import { loadAuth } from "../lib/authStore";
-import Screen from "../components/Screen";
+import StudentScreen from "../components/StudentScreen";
 import AppHeader from "../components/AppHeader";
 import { useAppTheme } from "../lib/themeStore";
 
@@ -84,19 +84,19 @@ export default function MySports() {
 
   if (loading) {
     return (
-      <Screen>
+      <StudentScreen activeRoute="/mySports">
         <AppHeader title="My Sports" subtitle="Your approved sports" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={theme.accent} />
           <Text style={{ color: theme.textSub, marginTop: 12, fontSize: 14 }}>Loading your sports...</Text>
         </View>
-      </Screen>
+      </StudentScreen>
     );
   }
 
   if (error) {
     return (
-      <Screen>
+      <StudentScreen activeRoute="/mySports">
         <AppHeader title="My Sports" subtitle="Your approved sports" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
           <Ionicons name="wifi-outline" size={56} color="#EF4444" />
@@ -109,12 +109,12 @@ export default function MySports() {
             <Text style={{ color: theme.btnPrimaryText, fontWeight: "900", fontSize: 15 }}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </Screen>
+      </StudentScreen>
     );
   }
 
   return (
-    <Screen>
+    <StudentScreen activeRoute="/mySports">
       <AppHeader title="My Sports" subtitle={`${items.length} approved sport${items.length !== 1 ? "s" : ""}`} />
 
       <FlatList
@@ -213,6 +213,6 @@ export default function MySports() {
           );
         }}
       />
-    </Screen>
+    </StudentScreen>
   );
 }

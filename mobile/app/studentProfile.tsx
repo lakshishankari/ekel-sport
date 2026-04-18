@@ -6,69 +6,63 @@ import {
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { loadAuth } from "../lib/authStore";
-import { loadLocalProfile, saveLocalProfile, type LocalProfile } from "../lib/profileStore";
+import { apiGet, apiPut } from "../lib/api";
 import { useAppTheme } from "../lib/themeStore";
 
-function InitialsAvatar({ name, color, size = 90 }: { name: string; color: string; size?: number }) {
-  const initials = name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-  return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ color: "white", fontWeight: "900", fontSize: size * 0.36 }}>{initials || "?"}</Text>
-    </View>
-  );
+const AVATAR_COLORS = ["#4F46E5", "#10B981", "#C9A227", "#EF4444", "#8B5CF6", "#3B82F6", "#F59E0B"];
+function hashColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function InfoRow({ icon, label, value, theme }: { icon: any; label: string; value: string; theme: any }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: theme.bgCard, borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.border }}>
-      <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: theme.accent + "22", alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name={icon} size={18} color={theme.accent} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</Text>
-        <Text style={{ color: theme.text, fontSize: 15, fontWeight: "700", marginTop: 2 }}>{value}</Text>
-      </View>
-    </View>
-  );
-}
+type ProfileData = {
+  full_name: string; email: string; student_id: string | null; role: string;
+  department: string; yearOfStudy: string; bio: string; avatarColor: string;
+};
 
 export default function StudentProfile() {
   const { theme, isDark } = useAppTheme();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [profile, setProfile] = useState<LocalProfile>({ department: "", yearOfStudy: "", bio: "", avatarColor: "#4F46E5" });
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [editing, setEditing]   = useState(false);
+  const [profile, setProfile]   = useState<ProfileData>({
+    full_name: "Student", email: "", student_id: null, role: "STUDENT",
+    department: "", yearOfStudy: "", bio: "", avatarColor: "#4F46E5",
+  });
   const [editDept, setEditDept] = useState("");
   const [editYear, setEditYear] = useState("");
-  const [editBio, setEditBio] = useState("");
+  const [editBio, setEditBio]   = useState("");
 
   const load = useCallback(async () => {
     try {
       const auth = await loadAuth();
       if (!auth.token || auth.role !== "STUDENT") { router.replace("/login"); return; }
-      setFullName(auth.fullName || "Student");
-      setEmail(auth.email || "");
-      const local = await loadLocalProfile(auth.fullName || "");
-      setProfile(local);
-    } finally { setLoading(false); }
+      const data = await apiGet<ProfileData>("/api/student/profile", auth.token);
+      setProfile({ ...data, avatarColor: hashColor(data.full_name) });
+    } catch { /* fall back to auth cache */ }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   function startEdit() { setEditDept(profile.department); setEditYear(profile.yearOfStudy); setEditBio(profile.bio); setEditing(true); }
-  function cancelEdit() { setEditing(false); }
 
   async function saveEdit() {
     try {
       setSaving(true);
-      const updated: LocalProfile = { ...profile, department: editDept.trim(), yearOfStudy: editYear.trim(), bio: editBio.trim() };
-      await saveLocalProfile(updated);
-      setProfile(updated);
+      const { token } = await loadAuth();
+      await apiPut("/api/student/profile", {
+        department: editDept.trim(),
+        yearOfStudy: editYear.trim(),
+        bio: editBio.trim(),
+        avatarColor: profile.avatarColor,
+      }, token!);
+      setProfile((p) => ({ ...p, department: editDept.trim(), yearOfStudy: editYear.trim(), bio: editBio.trim() }));
       setEditing(false);
-    } catch { Alert.alert("Error", "Could not save profile."); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not save profile.");
+    } finally { setSaving(false); }
   }
 
   if (loading) {
@@ -79,10 +73,8 @@ export default function StudentProfile() {
     );
   }
 
-  const inputStyle = {
-    backgroundColor: theme.bgInput, borderRadius: 12, borderWidth: 1, borderColor: theme.border,
-    color: theme.text, fontSize: 15, fontWeight: "600" as const, paddingHorizontal: 14, paddingVertical: 12,
-  };
+  const initials = profile.full_name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+  const inputStyle = { backgroundColor: theme.bgInput, borderRadius: 12, borderWidth: 1, borderColor: theme.border, color: theme.text, fontSize: 15, fontWeight: "600" as const, paddingHorizontal: 14, paddingVertical: 12 };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -99,25 +91,25 @@ export default function StudentProfile() {
             <Ionicons name="pencil-outline" size={22} color={theme.accent} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={cancelEdit}>
+          <TouchableOpacity onPress={() => setEditing(false)}>
             <Text style={{ color: theme.textSub, fontWeight: "700", fontSize: 15 }}>Cancel</Text>
           </TouchableOpacity>
         )}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
-
         {/* Avatar + Name */}
         <View style={{ alignItems: "center", paddingTop: 20, paddingBottom: 24 }}>
-          <View style={{ position: "relative", marginBottom: 14 }}>
-            <InitialsAvatar name={fullName} color={profile.avatarColor} size={96} />
-            <View style={{ position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: theme.accent, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.bg }}>
-              <Ionicons name="camera" size={14} color={theme.btnPrimaryText} />
-            </View>
+          <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: profile.avatarColor, alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+            <Text style={{ color: "white", fontWeight: "900", fontSize: 34 }}>{initials || "?"}</Text>
           </View>
 
-          <Text style={{ color: theme.text, fontSize: 24, fontWeight: "900", letterSpacing: 0.3 }}>{fullName}</Text>
-          <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: "600", marginTop: 4 }}>{email}</Text>
+          <Text style={{ color: theme.text, fontSize: 24, fontWeight: "900", letterSpacing: 0.3 }}>{profile.full_name}</Text>
+          <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: "600", marginTop: 4 }}>{profile.email}</Text>
+
+          {profile.student_id && (
+            <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "600", marginTop: 4 }}>{profile.student_id}</Text>
+          )}
 
           {profile.department ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10, backgroundColor: theme.accent + "18", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 }}>
@@ -142,15 +134,26 @@ export default function StudentProfile() {
           </View>
         )}
 
-        {/* Divider */}
         <View style={{ height: 1, backgroundColor: theme.border, marginHorizontal: 20, marginBottom: 20 }} />
 
         {/* VIEW MODE */}
         {!editing && (
           <View style={{ paddingHorizontal: 20 }}>
-            <InfoRow icon="id-card-outline"   label="Role"          value="Student"                       theme={theme} />
-            <InfoRow icon="school-outline"    label="Department"    value={profile.department || "—"}     theme={theme} />
-            <InfoRow icon="calendar-outline"  label="Year of Study" value={profile.yearOfStudy || "—"}   theme={theme} />
+            {[
+              { icon: "id-card-outline",   label: "Role",          value: "Student" },
+              { icon: "school-outline",    label: "Department",    value: profile.department || "—" },
+              { icon: "calendar-outline",  label: "Year of Study", value: profile.yearOfStudy || "—" },
+            ].map((row) => (
+              <View key={row.label} style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: theme.bgCard, borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.border }}>
+                <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: theme.accent + "22", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name={row.icon as any} size={18} color={theme.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>{row.label}</Text>
+                  <Text style={{ color: theme.text, fontSize: 15, fontWeight: "700", marginTop: 2 }}>{row.value}</Text>
+                </View>
+              </View>
+            ))}
           </View>
         )}
 

@@ -10,7 +10,465 @@ function isStaffEmail(email) {
   return String(email || "").trim().toLowerCase().endsWith("@kln.ac.lk");
 }
 
-// ✅ GET all users (ADMIN only)
+// ─────────────────────────────────────────────────────────────
+// ENSURE TABLES EXIST (called once on first request)
+// ─────────────────────────────────────────────────────────────
+async function ensureTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS posts (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      author_id   BIGINT UNSIGNED NOT NULL,
+      author_name VARCHAR(255) NOT NULL,
+      author_role ENUM('ADMIN','STUDENT') NOT NULL,
+      sport_tag   VARCHAR(100),
+      content     TEXT NOT NULL,
+      likes_count INT UNSIGNED DEFAULT 0,
+      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS post_likes (
+      id        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      post_id   INT UNSIGNED NOT NULL,
+      user_id   BIGINT UNSIGNED NOT NULL,
+      UNIQUE KEY uq_post_user (post_id, user_id)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS announcements (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      admin_id   BIGINT UNSIGNED NOT NULL,
+      admin_name VARCHAR(255) NOT NULL,
+      title      VARCHAR(255) NOT NULL,
+      message    TEXT NOT NULL,
+      sport_tag  VARCHAR(100),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS events (
+      id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      admin_id     BIGINT UNSIGNED NOT NULL,
+      title        VARCHAR(255) NOT NULL,
+      description  TEXT,
+      sport_tag    VARCHAR(100),
+      venue        VARCHAR(255),
+      event_date   DATE,
+      event_time   VARCHAR(50),
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      user_id       BIGINT UNSIGNED PRIMARY KEY,
+      department    VARCHAR(255),
+      year_of_study VARCHAR(100),
+      bio           TEXT,
+      avatar_color  VARCHAR(20) DEFAULT '#4F46E5',
+      updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+  // Ensure performance_entries exists (may already exist from DB schema)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS performance_entries (
+      id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      student_user_id  BIGINT UNSIGNED NOT NULL,
+      sport_id         INT UNSIGNED NOT NULL,
+      type             ENUM('MATCH','FITNESS','DISCIPLINE') NOT NULL,
+      metric           VARCHAR(255),
+      value            DECIMAL(10,2),
+      notes            TEXT,
+      recorded_by      BIGINT UNSIGNED,
+      recorded_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  // Event team members — per-event roster (separate from general squad team)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS event_team_members (
+      id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      event_id         INT UNSIGNED NOT NULL,
+      student_user_id  BIGINT UNSIGNED NOT NULL,
+      sport_id         INT UNSIGNED NOT NULL,
+      assigned_by      BIGINT UNSIGNED,
+      assigned_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_event_student (event_id, student_user_id)
+    )
+  `);
+  // Add sport_id column to events table if it doesn't exist yet
+  try {
+    await pool.query(`ALTER TABLE events ADD COLUMN sport_id INT UNSIGNED NULL AFTER sport_tag`);
+    // Back-fill sport_id from sport_tag
+    await pool.query(`
+      UPDATE events e
+      JOIN sports s ON s.name = e.sport_tag
+      SET e.sport_id = s.id
+      WHERE e.sport_id IS NULL AND e.sport_tag IS NOT NULL
+    `);
+  } catch (_) { /* column already exists */ }
+}
+ensureTables().catch((e) => console.warn("ensureTables warning:", e.message));
+
+// ─────────────────────────────────────────────────────────────
+// PERFORMANCE ENTRIES
+// GET  /api/admin/performance/students?sportId=X
+//   → returns all APPROVED students for a sport (to load in performance screens)
+// POST /api/admin/performance/batch
+//   → { sportId, type, entries: [{ studentUserId, metric, value, notes }] }
+//   → upsert performance_entries rows
+// GET  /api/admin/performance/history?sportId=X&type=MATCH|FITNESS|DISCIPLINE
+//   → list recent entries for review
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/performance/students", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId = Number(req.query.sportId);
+    if (!sportId) return res.status(400).json({ message: "sportId is required" });
+
+    const [rows] = await pool.query(`
+      SELECT
+        u.id AS student_user_id,
+        u.full_name,
+        u.student_id,
+        se.squad_level
+      FROM sport_enrollments se
+      JOIN users u ON u.id = se.student_user_id
+      WHERE se.sport_id = ? AND se.status = 'APPROVED'
+      ORDER BY u.full_name ASC
+    `, [sportId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("PERFORMANCE STUDENTS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.post("/performance/batch", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId = Number(req.body?.sportId);
+    const type    = String(req.body?.type || "").toUpperCase();
+    const entries = req.body?.entries;
+
+    if (!sportId)                               return res.status(400).json({ message: "sportId is required" });
+    if (!["MATCH", "FITNESS", "DISCIPLINE"].includes(type)) return res.status(400).json({ message: "type must be MATCH, FITNESS, or DISCIPLINE" });
+    if (!Array.isArray(entries) || entries.length === 0)    return res.status(400).json({ message: "entries array is required" });
+
+    let saved = 0;
+    for (const entry of entries) {
+      const studentUserId = Number(entry.studentUserId);
+      const value         = entry.value !== "" && entry.value != null ? Number(entry.value) : null;
+      const metric        = String(entry.metric || "Score").trim();
+      const notes         = String(entry.notes  || "").trim() || null;
+
+      if (!studentUserId) continue;
+
+      await pool.query(
+        `INSERT INTO performance_entries (student_user_id, sport_id, type, metric, value, notes, recorded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [studentUserId, sportId, type, metric, value, notes, req.user.id]
+      );
+      saved++;
+    }
+
+    return res.json({ ok: true, saved });
+  } catch (err) {
+    console.error("PERFORMANCE BATCH SAVE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.get("/performance/history", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId = Number(req.query.sportId);
+    const type    = String(req.query.type || "").toUpperCase();
+
+    let where = "WHERE pe.sport_id = ?";
+    const params = [sportId];
+    if (["MATCH", "FITNESS", "DISCIPLINE"].includes(type)) {
+      where += " AND pe.type = ?";
+      params.push(type);
+    }
+
+    const [rows] = await pool.query(`
+      SELECT
+        pe.id, pe.type, pe.metric, pe.value, pe.notes, pe.recorded_at,
+        u.full_name, u.student_id
+      FROM performance_entries pe
+      JOIN users u ON u.id = pe.student_user_id
+      ${where}
+      ORDER BY pe.recorded_at DESC
+      LIMIT 100
+    `, params);
+
+    return res.json(rows);
+  } catch (err) {
+    console.error("PERFORMANCE HISTORY ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
+// ─────────────────────────────────────────────────────────────
+// ADMIN STATS (live dashboard counts)
+// GET /api/admin/stats
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/stats", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [[{ totalStudents }]] = await pool.query(
+      "SELECT COUNT(*) AS totalStudents FROM users WHERE role = 'STUDENT'"
+    );
+    const [[{ totalSports }]] = await pool.query(
+      "SELECT COUNT(*) AS totalSports FROM sports"
+    );
+    const [[{ pendingEnrollments }]] = await pool.query(
+      "SELECT COUNT(*) AS pendingEnrollments FROM sport_enrollments WHERE status = 'PENDING'"
+    );
+    const [[{ inSquadCount }]] = await pool.query(
+      "SELECT COUNT(*) AS inSquadCount FROM sport_enrollments WHERE status = 'APPROVED' AND squad_level = 'SQUAD'"
+    );
+    return res.json({ totalStudents, totalSports, pendingEnrollments, inSquadCount });
+  } catch (err) {
+    console.error("ADMIN STATS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// ADMIN PROFILE
+// GET /api/admin/profile
+// PUT /api/admin/profile  { fullName }
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/profile", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, full_name, email, role, created_at FROM users WHERE id = ?",
+      [req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ message: "User not found" });
+    return res.json(rows[0]);
+  } catch (err) {
+    console.error("ADMIN PROFILE GET ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.put("/profile", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const fullName = String(req.body?.fullName || "").trim();
+    if (!fullName) return res.status(400).json({ message: "fullName is required" });
+    await pool.query("UPDATE users SET full_name = ? WHERE id = ?", [fullName, req.user.id]);
+    return res.json({ ok: true, message: "Profile updated" });
+  } catch (err) {
+    console.error("ADMIN PROFILE PUT ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// SOCIAL FEED — POSTS
+// GET  /api/admin/posts          — list all posts
+// POST /api/admin/posts          — create post (admin)
+// POST /api/admin/posts/:id/like — toggle like
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/posts", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        p.id, p.author_id, p.author_name, p.author_role, p.sport_tag,
+        p.content, p.likes_count, p.created_at,
+        IFNULL(pl.user_id, 0) AS liked_by_me
+      FROM posts p
+      LEFT JOIN post_likes pl ON pl.post_id = p.id AND pl.user_id = ?
+      ORDER BY p.created_at DESC
+      LIMIT 50
+    `, [req.user.id]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("POSTS GET ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.post("/posts", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const content  = String(req.body?.content || "").trim();
+    const sportTag = String(req.body?.sportTag || "").trim() || null;
+    if (!content) return res.status(400).json({ message: "content is required" });
+
+    const [userRow] = await pool.query("SELECT full_name FROM users WHERE id = ?", [req.user.id]);
+    const authorName = userRow[0]?.full_name || "Admin";
+
+    const [result] = await pool.query(
+      "INSERT INTO posts (author_id, author_name, author_role, sport_tag, content) VALUES (?, ?, 'ADMIN', ?, ?)",
+      [req.user.id, authorName, sportTag, content]
+    );
+    return res.status(201).json({ ok: true, postId: result.insertId });
+  } catch (err) {
+    console.error("POST CREATE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.post("/posts/:id/like", authMiddleware, async (req, res) => {
+  try {
+    const postId = Number(req.params.id);
+    const userId = req.user.id;
+    const [existing] = await pool.query(
+      "SELECT id FROM post_likes WHERE post_id = ? AND user_id = ?", [postId, userId]
+    );
+    if (existing.length > 0) {
+      await pool.query("DELETE FROM post_likes WHERE post_id = ? AND user_id = ?", [postId, userId]);
+      await pool.query("UPDATE posts SET likes_count = GREATEST(0, likes_count - 1) WHERE id = ?", [postId]);
+      return res.json({ liked: false });
+    } else {
+      await pool.query("INSERT IGNORE INTO post_likes (post_id, user_id) VALUES (?, ?)", [postId, userId]);
+      await pool.query("UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?", [postId]);
+      return res.json({ liked: true });
+    }
+  } catch (err) {
+    console.error("LIKE TOGGLE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// ANNOUNCEMENTS
+// GET  /api/admin/announcements
+// POST /api/admin/announcements  { title, message, sportTag }
+//   → saves to announcements table
+//   → inserts into notifications for all students (or sport-specific)
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/announcements", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM announcements ORDER BY created_at DESC LIMIT 50"
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error("ANNOUNCEMENTS GET ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.post("/announcements", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const title    = String(req.body?.title   || "").trim();
+    const message  = String(req.body?.message || "").trim();
+    const sportTag = String(req.body?.sportTag || "").trim() || null;
+
+    if (!title || !message) return res.status(400).json({ message: "title and message are required" });
+
+    const [userRow] = await pool.query("SELECT full_name FROM users WHERE id = ?", [req.user.id]);
+    const adminName = userRow[0]?.full_name || "Admin";
+
+    // Save announcement
+    await pool.query(
+      "INSERT INTO announcements (admin_id, admin_name, title, message, sport_tag) VALUES (?, ?, ?, ?, ?)",
+      [req.user.id, adminName, title, message, sportTag]
+    );
+
+    // Push to notifications — all students OR sport-specific students
+    let studentIds = [];
+    if (sportTag) {
+      const [sportRow] = await pool.query("SELECT id FROM sports WHERE name = ? LIMIT 1", [sportTag]);
+      if (sportRow[0]) {
+        const [enrolled] = await pool.query(
+          "SELECT DISTINCT student_user_id FROM sport_enrollments WHERE sport_id = ? AND status = 'APPROVED'",
+          [sportRow[0].id]
+        );
+        studentIds = enrolled.map((r) => r.student_user_id);
+      }
+    } else {
+      const [allStudents] = await pool.query("SELECT id FROM users WHERE role = 'STUDENT'");
+      studentIds = allStudents.map((r) => r.id);
+    }
+
+    if (studentIds.length > 0) {
+      const values = studentIds.map((id) => [id, title, message, "ANNOUNCEMENT"]);
+      await pool.query(
+        "INSERT INTO notifications (user_id, title, message, type) VALUES ?",
+        [values]
+      );
+    }
+
+    return res.status(201).json({ ok: true, notified: studentIds.length });
+  } catch (err) {
+    console.error("ANNOUNCEMENT CREATE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// EVENTS
+// GET  /api/admin/events
+// POST /api/admin/events  { title, description, sportTag, venue, eventDate, eventTime }
+// DELETE /api/admin/events/:id
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/events", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM events ORDER BY event_date ASC, event_time ASC"
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error("EVENTS GET ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.post("/events", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const title       = String(req.body?.title       || "").trim();
+    const description = String(req.body?.description || "").trim() || null;
+    const sportTag    = String(req.body?.sportTag    || "").trim() || null;
+    const venue       = String(req.body?.venue       || "").trim() || null;
+    const eventDate   = String(req.body?.eventDate   || "").trim() || null;
+    const eventTime   = String(req.body?.eventTime   || "").trim() || null;
+
+    if (!title) return res.status(400).json({ message: "title is required" });
+
+    // Resolve sport_id from sport_tag
+    let sportId = null;
+    if (sportTag) {
+      const [sportRows] = await pool.query("SELECT id FROM sports WHERE name = ? LIMIT 1", [sportTag]);
+      sportId = sportRows[0]?.id || null;
+    }
+
+    const [result] = await pool.query(
+      "INSERT INTO events (admin_id, title, description, sport_tag, sport_id, venue, event_date, event_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [req.user.id, title, description, sportTag, sportId, venue, eventDate, eventTime]
+    );
+
+    // Notify all students
+    const [allStudents] = await pool.query("SELECT id FROM users WHERE role = 'STUDENT'");
+    if (allStudents.length > 0) {
+      const values = allStudents.map((r) => [
+        r.id,
+        `📅 New Event: ${title}`,
+        `${venue ? venue + " · " : ""}${eventDate || "Date TBD"} ${eventTime || ""}`.trim(),
+        "SYSTEM",
+      ]);
+      await pool.query("INSERT INTO notifications (user_id, title, message, type) VALUES ?", [values]);
+    }
+
+    return res.status(201).json({ ok: true, eventId: result.insertId });
+  } catch (err) {
+    console.error("EVENT CREATE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.delete("/events/:id", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    await pool.query("DELETE FROM events WHERE id = ?", [req.params.id]);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("EVENT DELETE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────────────────────
 adminRouter.get("/users", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -23,13 +481,14 @@ adminRouter.get("/users", authMiddleware, roleMiddleware(["ADMIN"]), async (req,
   }
 });
 
-// ✅ GET all sports (ADMIN only)
+// ─────────────────────────────────────────────────────────────
+// SPORTS
+// ─────────────────────────────────────────────────────────────
 adminRouter.get("/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT id, name, venue, schedule_text, instructor_name, instructor_email, whatsapp_link, created_at
-       FROM sports
-       ORDER BY id DESC`
+       FROM sports ORDER BY id DESC`
     );
     return res.json(rows);
   } catch (err) {
@@ -38,430 +497,450 @@ adminRouter.get("/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (req
   }
 });
 
-// ✅ CREATE sport module (ADMIN only)
 adminRouter.post("/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
-    const name = String(req.body?.name || "").trim();
-    const venue = String(req.body?.venue || "").trim();
-    const schedule_text = String(req.body?.schedule_text || "").trim();
-    const instructor_name = String(req.body?.instructor_name || "").trim();
+    const name             = String(req.body?.name             || "").trim();
+    const venue            = String(req.body?.venue            || "").trim();
+    const schedule_text    = String(req.body?.schedule_text    || "").trim();
+    const instructor_name  = String(req.body?.instructor_name  || "").trim();
     const instructor_email = String(req.body?.instructor_email || "").trim().toLowerCase();
-    const whatsapp_link = String(req.body?.whatsapp_link || "").trim();
+    const whatsapp_link    = String(req.body?.whatsapp_link    || "").trim();
 
-    if (!name) {
-      return res.status(400).json({ message: "Sport name is required" });
-    }
+    if (!name) return res.status(400).json({ message: "Sport name is required" });
 
-    // Optional: enforce official email for instructor if provided
-    if (instructor_email && !isStaffEmail(instructor_email)) {
-      return res.status(400).json({
-        message: "Instructor email must be an official @kln.ac.lk email",
-      });
-    }
-
+    // instructor_email is optional — accept any email format or leave blank
     const [existing] = await pool.query("SELECT id FROM sports WHERE name = ?", [name]);
-    if (existing.length > 0) {
-      return res.status(409).json({ message: "Sport already exists" });
-    }
+    if (existing.length > 0) return res.status(409).json({ message: "Sport already exists" });
 
     const [result] = await pool.query(
       `INSERT INTO sports (name, venue, schedule_text, instructor_name, instructor_email, whatsapp_link)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        name,
-        venue || null,
-        schedule_text || null,
-        instructor_name || null,
-        instructor_email || null,
-        whatsapp_link || null,
-      ]
+      [name, venue || null, schedule_text || null, instructor_name || null, instructor_email || null, whatsapp_link || null]
     );
-
-    return res.status(201).json({
-      message: "Sport created successfully",
-      sportId: result.insertId,
-    });
+    return res.status(201).json({ message: "Sport created successfully", sportId: result.insertId });
   } catch (err) {
     console.error("CREATE SPORT ERROR:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// ✅ ADMIN: View pending enrollment requests
-adminRouter.get(
-  "/enrollments/pending",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  async (req, res) => {
-    try {
-      const [rows] = await pool.query(
-        `
-        SELECT
-          se.id AS enrollment_id,
-          se.status,
-          se.requested_at,
-          s.id AS sport_id,
-          s.name AS sport_name,
-          u.id AS student_user_id,
-          u.student_id,
-          u.full_name,
-          u.email
-        FROM sport_enrollments se
-        JOIN sports s ON s.id = se.sport_id
-        JOIN users u ON u.id = se.student_user_id
-        WHERE se.status = 'PENDING'
-        ORDER BY se.requested_at ASC
-        `
-      );
-
-      return res.json(rows);
-    } catch (err) {
-      console.error("PENDING ENROLLMENTS ERROR:", err);
-      return res.status(500).json({ message: "Internal server error" });
-    }
+// ─────────────────────────────────────────────────────────────
+// ENROLLMENTS
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/enrollments/pending", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        se.id AS enrollment_id, se.status, se.requested_at,
+        s.id AS sport_id, s.name AS sport_name,
+        u.id AS student_user_id, u.student_id, u.full_name, u.email
+      FROM sport_enrollments se
+      JOIN sports s ON s.id = se.sport_id
+      JOIN users u  ON u.id = se.student_user_id
+      WHERE se.status = 'PENDING'
+      ORDER BY se.requested_at ASC
+    `);
+    return res.json(rows);
+  } catch (err) {
+    console.error("PENDING ENROLLMENTS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-);
+});
 
-// ✅ ADMIN: Approve/Reject enrollment request (creates notification ✅)
-adminRouter.post(
-  "/enrollments/:enrollmentId/decision",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  async (req, res) => {
-    try {
-      const enrollmentId = Number(req.params.enrollmentId);
-      const decision = String(req.body?.decision || "").toUpperCase(); // APPROVE / REJECT
-      const note = String(req.body?.note || "").trim();
+adminRouter.post("/enrollments/:enrollmentId/decision", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const enrollmentId = Number(req.params.enrollmentId);
+    const decision     = String(req.body?.decision || "").toUpperCase();
+    const note         = String(req.body?.note     || "").trim();
 
-      if (!enrollmentId) return res.status(400).json({ message: "Invalid enrollmentId" });
-      if (!["APPROVE", "REJECT"].includes(decision)) {
-        return res.status(400).json({ message: "decision must be APPROVE or REJECT" });
-      }
+    if (!enrollmentId) return res.status(400).json({ message: "Invalid enrollmentId" });
+    if (!["APPROVE", "REJECT"].includes(decision))
+      return res.status(400).json({ message: "decision must be APPROVE or REJECT" });
 
-      // Check enrollment exists + is pending
-      const [rows] = await pool.query(
-        "SELECT id, status FROM sport_enrollments WHERE id = ?",
-        [enrollmentId]
-      );
+    const [rows] = await pool.query("SELECT id, status FROM sport_enrollments WHERE id = ?", [enrollmentId]);
+    if (rows.length === 0) return res.status(404).json({ message: "Enrollment not found" });
+    if (rows[0].status !== "PENDING") return res.status(409).json({ message: "Already decided" });
 
-      if (rows.length === 0) return res.status(404).json({ message: "Enrollment not found" });
-      if (rows[0].status !== "PENDING") {
-        return res.status(409).json({ message: "This request is already decided" });
-      }
+    const newStatus = decision === "APPROVE" ? "APPROVED" : "REJECTED";
+    const [detailRows] = await pool.query(
+      `SELECT se.student_user_id, s.name AS sport_name
+       FROM sport_enrollments se JOIN sports s ON s.id = se.sport_id WHERE se.id = ? LIMIT 1`,
+      [enrollmentId]
+    );
 
-      const newStatus = decision === "APPROVE" ? "APPROVED" : "REJECTED";
+    await pool.query(
+      `UPDATE sport_enrollments SET status = ?, decided_at = NOW(), decided_by_admin_id = ?, decision_note = ? WHERE id = ?`,
+      [newStatus, req.user.id, note || null, enrollmentId]
+    );
 
-      // ✅ Get details for notification (student + sport name)
-      const [detailRows] = await pool.query(
-        `
-        SELECT se.student_user_id, s.name AS sport_name
-        FROM sport_enrollments se
-        JOIN sports s ON s.id = se.sport_id
-        WHERE se.id = ?
-        LIMIT 1
-        `,
-        [enrollmentId]
-      );
-
+    if (detailRows.length > 0) {
+      const { student_user_id, sport_name } = detailRows[0];
       await pool.query(
-        `
-        UPDATE sport_enrollments
-        SET status = ?, decided_at = NOW(), decided_by_admin_id = ?, decision_note = ?
-        WHERE id = ?
-        `,
-        [newStatus, req.user.id, note || null, enrollmentId]
+        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'ENROLLMENT')",
+        [student_user_id, `Sport Enrollment ${newStatus}`, `Your request to join ${sport_name} was ${newStatus}.`]
       );
-
-      // ✅ Insert notification
-      if (detailRows.length > 0) {
-        const studentUserId = detailRows[0].student_user_id;
-        const sportName = detailRows[0].sport_name;
-
-        await pool.query(
-          `
-          INSERT INTO notifications (user_id, title, message, type)
-          VALUES (?, ?, ?, 'ENROLLMENT')
-          `,
-          [
-            studentUserId,
-            `Sport Enrollment ${newStatus}`,
-            `Your request to join ${sportName} was ${newStatus}.`,
-          ]
-        );
-      }
-
-      return res.json({ message: `Enrollment ${newStatus}` });
-    } catch (err) {
-      console.error("ENROLLMENT DECISION ERROR:", err);
-      return res.status(500).json({ message: "Internal server error" });
     }
+    return res.json({ message: `Enrollment ${newStatus}` });
+  } catch (err) {
+    console.error("ENROLLMENT DECISION ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-);
+});
 
-// ✅ Create advisory account (ADMIN sets password)
-adminRouter.post(
-  "/create-advisory",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  async (req, res) => {
-    try {
-      const fullName = String(req.body?.fullName || "").trim();
-      const email = String(req.body?.email || "").trim().toLowerCase();
-      const password = String(req.body?.password || "");
+// ─────────────────────────────────────────────────────────────
+// CREATE ADVISORY ACCOUNT
+// ─────────────────────────────────────────────────────────────
+adminRouter.post("/create-advisory", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const fullName = String(req.body?.fullName || "").trim();
+    const email    = String(req.body?.email    || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
 
-      if (!fullName || !email || !password) {
-        return res.status(400).json({ message: "fullName, email, password are required" });
-      }
+    if (!fullName || !email || !password) return res.status(400).json({ message: "fullName, email, password are required" });
+    if (password.length < 8)              return res.status(400).json({ message: "Password must be at least 8 characters" });
+    if (!isStaffEmail(email))             return res.status(400).json({ message: "Advisory email must be an official @kln.ac.lk email" });
 
-      if (password.length < 8) {
-        return res.status(400).json({ message: "Password must be at least 8 characters" });
-      }
+    const [existingEmail] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
+    if (existingEmail.length > 0) return res.status(409).json({ message: "Email already registered" });
 
-      // ✅ Enforce advisory email domain
-      if (!isStaffEmail(email)) {
-        return res.status(400).json({
-          message: "Advisory email must be an official @kln.ac.lk email",
-        });
-      }
-
-      const [existingEmail] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
-      if (existingEmail.length > 0) {
-        return res.status(409).json({ message: "Email already registered" });
-      }
-
-      const passwordHash = await bcrypt.hash(password, 12);
-      const role = "ADVISORY";
-
-      const [result] = await pool.query(
-        `INSERT INTO users (role, student_id, full_name, email, password_hash)
-         VALUES (?, ?, ?, ?, ?)`,
-        [role, null, fullName, email, passwordHash]
-      );
-
-      return res.status(201).json({
-        message: "Advisory account created",
-        user: {
-          id: result.insertId,
-          role,
-          fullName,
-          email,
-        },
-      });
-    } catch (err) {
-      console.error("CREATE ADVISORY ERROR:", err);
-      return res.status(500).json({ message: "Internal server error" });
-    }
+    const passwordHash = await bcrypt.hash(password, 12);
+    const [result] = await pool.query(
+      `INSERT INTO users (role, student_id, full_name, email, password_hash) VALUES (?, ?, ?, ?, ?)`,
+      ["ADVISORY", null, fullName, email, passwordHash]
+    );
+    return res.status(201).json({ message: "Advisory account created", user: { id: result.insertId, role: "ADVISORY", fullName, email } });
+  } catch (err) {
+    console.error("CREATE ADVISORY ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-);
+});
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// SQUAD & POOL MANAGEMENT
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/**
- * GET /api/admin/squad-pool/sports
- * Returns sports that have at least one APPROVED enrollment
- */
-adminRouter.get(
-  "/squad-pool/sports",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  async (req, res) => {
-    try {
-      const [rows] = await pool.query(`
-        SELECT DISTINCT s.id, s.name
-        FROM sports s
-        INNER JOIN sport_enrollments se ON se.sport_id = s.id
-        WHERE se.status = 'APPROVED'
-        ORDER BY s.name ASC
-      `);
-      return res.json(rows);
-    } catch (err) {
-      console.error("SQUAD-POOL SPORTS ERROR:", err);
-      return res.status(500).json({ message: "Internal server error" });
-    }
+// ─────────────────────────────────────────────────────────────
+// SQUAD POOL
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/squad-pool/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT DISTINCT s.id, s.name FROM sports s
+      INNER JOIN sport_enrollments se ON se.sport_id = s.id
+      WHERE se.status = 'APPROVED' ORDER BY s.name ASC
+    `);
+    return res.json(rows);
+  } catch (err) {
+    console.error("SQUAD-POOL SPORTS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-);
+});
 
-/**
- * GET /api/admin/squad-pool/:sportId
- * Returns all APPROVED students for a sport with aggregated performance stats
- */
-adminRouter.get(
-  "/squad-pool/:sportId",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  async (req, res) => {
-    try {
-      const sportId = Number(req.params.sportId);
-      if (!sportId) return res.status(400).json({ message: "Invalid sportId" });
+adminRouter.get("/squad-pool/:sportId", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId = Number(req.params.sportId);
+    if (!sportId) return res.status(400).json({ message: "Invalid sportId" });
 
-      const [rows] = await pool.query(
-        `
-        SELECT
-          u.id                          AS student_user_id,
-          u.full_name,
-          u.student_id,
-          se.squad_level,
-          COUNT(DISTINCT a.id)          AS attendance_count,
-          COUNT(DISTINCT pe.id)         AS performance_count,
-          ROUND(AVG(pe.value), 1)       AS avg_score,
-          SUM(CASE WHEN pe.type = 'MATCH'     THEN 1 ELSE 0 END) AS match_entries,
-          SUM(CASE WHEN pe.type = 'FITNESS'   THEN 1 ELSE 0 END) AS fitness_entries,
-          SUM(CASE WHEN pe.type = 'DISCIPLINE' THEN 1 ELSE 0 END) AS discipline_entries,
-          (SELECT COUNT(*) FROM student_team_assignment sta
-           WHERE sta.student_user_id = u.id AND sta.sport_id = ?) AS in_team
-        FROM sport_enrollments se
-        JOIN users u ON u.id = se.student_user_id
-        LEFT JOIN attendance a
-          ON a.student_user_id = u.id AND a.sport_id = ?
-        LEFT JOIN performance_entries pe
-          ON pe.student_user_id = u.id AND pe.sport_id = ?
-        WHERE se.sport_id = ? AND se.status = 'APPROVED'
-        GROUP BY u.id, u.full_name, u.student_id, se.squad_level
-        ORDER BY se.squad_level DESC, avg_score DESC
-        `,
-        [sportId, sportId, sportId, sportId]
-      );
-
-      return res.json(rows);
-    } catch (err) {
-      console.error("SQUAD-POOL STUDENTS ERROR:", err);
-      return res.status(500).json({ message: "Internal server error" });
-    }
+    const [rows] = await pool.query(`
+      SELECT
+        u.id AS student_user_id, u.full_name, u.student_id,
+        se.squad_level,
+        COUNT(DISTINCT a.id)    AS attendance_count,
+        COUNT(DISTINCT pe.id)   AS performance_count,
+        ROUND(AVG(pe.value), 1) AS avg_score,
+        SUM(CASE WHEN pe.type = 'MATCH'      THEN 1 ELSE 0 END) AS match_entries,
+        SUM(CASE WHEN pe.type = 'FITNESS'    THEN 1 ELSE 0 END) AS fitness_entries,
+        SUM(CASE WHEN pe.type = 'DISCIPLINE' THEN 1 ELSE 0 END) AS discipline_entries,
+        (SELECT COUNT(*) FROM student_team_assignment sta
+         WHERE sta.student_user_id = u.id AND sta.sport_id = ?) AS in_team
+      FROM sport_enrollments se
+      JOIN users u ON u.id = se.student_user_id
+      LEFT JOIN attendance a   ON a.student_user_id = u.id AND a.sport_id = ?
+      LEFT JOIN performance_entries pe ON pe.student_user_id = u.id AND pe.sport_id = ?
+      WHERE se.sport_id = ? AND se.status = 'APPROVED'
+      GROUP BY u.id, u.full_name, u.student_id, se.squad_level
+      ORDER BY se.squad_level DESC, avg_score DESC
+    `, [sportId, sportId, sportId, sportId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("SQUAD-POOL STUDENTS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-);
+});
 
-/**
- * POST /api/admin/squad-pool/:sportId/:studentUserId/level
- * Update a student's squad_level (NONE / POOL / SQUAD) for a sport
- * Body: { level: "NONE" | "POOL" | "SQUAD" }
- */
-adminRouter.post(
-  "/squad-pool/:sportId/:studentUserId/level",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  async (req, res) => {
-    try {
-      const sportId = Number(req.params.sportId);
-      const studentUserId = Number(req.params.studentUserId);
-      const level = String(req.body?.level || "").toUpperCase();
+adminRouter.post("/squad-pool/:sportId/:studentUserId/level", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId       = Number(req.params.sportId);
+    const studentUserId = Number(req.params.studentUserId);
+    const level         = String(req.body?.level || "").toUpperCase();
 
-      if (!sportId || !studentUserId) {
-        return res.status(400).json({ message: "Invalid sportId or studentUserId" });
-      }
-      if (!["NONE", "POOL", "SQUAD"].includes(level)) {
-        return res.status(400).json({ message: "level must be NONE, POOL, or SQUAD" });
-      }
+    if (!sportId || !studentUserId) return res.status(400).json({ message: "Invalid sportId or studentUserId" });
+    if (!["NONE", "POOL", "SQUAD"].includes(level)) return res.status(400).json({ message: "level must be NONE, POOL, or SQUAD" });
 
-      // Check enrollment exists and is APPROVED
-      const [rows] = await pool.query(
-        "SELECT id FROM sport_enrollments WHERE sport_id=? AND student_user_id=? AND status='APPROVED'",
+    const [rows] = await pool.query(
+      "SELECT id FROM sport_enrollments WHERE sport_id=? AND student_user_id=? AND status='APPROVED'",
+      [sportId, studentUserId]
+    );
+    if (rows.length === 0) return res.status(404).json({ message: "No approved enrollment found" });
+
+    await pool.query(
+      "UPDATE sport_enrollments SET squad_level=? WHERE sport_id=? AND student_user_id=?",
+      [level, sportId, studentUserId]
+    );
+
+    const [sportRows] = await pool.query("SELECT name FROM sports WHERE id=?", [sportId]);
+    const sportName = sportRows[0]?.name || "Unknown Sport";
+    const msgs = {
+      POOL:  `You have been selected to the ${sportName} Pool! Keep training hard.`,
+      SQUAD: `Congratulations! You have been selected to the ${sportName} Squad! 🏆`,
+      NONE:  `Your squad/pool status for ${sportName} has been updated.`,
+    };
+    await pool.query(
+      "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'SYSTEM')",
+      [studentUserId, `${sportName} — Level Updated`, msgs[level]]
+    );
+    return res.json({ ok: true, level });
+  } catch (err) {
+    console.error("SET SQUAD LEVEL ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+adminRouter.post("/squad-pool/:sportId/:studentUserId/team", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId       = Number(req.params.sportId);
+    const studentUserId = Number(req.params.studentUserId);
+    const inTeam        = Boolean(req.body?.inTeam);
+
+    if (!sportId || !studentUserId) return res.status(400).json({ message: "Invalid sportId or studentUserId" });
+
+    if (inTeam) {
+      const [existing] = await pool.query(
+        "SELECT id FROM student_team_assignment WHERE sport_id=? AND student_user_id=?",
         [sportId, studentUserId]
       );
-      if (rows.length === 0) {
-        return res.status(404).json({ message: "No approved enrollment found" });
+      if (existing.length === 0) {
+        const [enrollRow] = await pool.query(
+          "SELECT squad_level FROM sport_enrollments WHERE sport_id=? AND student_user_id=? LIMIT 1",
+          [sportId, studentUserId]
+        );
+        const teamLevel = ["POOL","SQUAD"].includes(enrollRow[0]?.squad_level) ? enrollRow[0].squad_level : "SQUAD";
+        await pool.query(
+          "INSERT INTO student_team_assignment (sport_id, student_user_id, assigned_by_admin_id, level) VALUES (?, ?, ?, ?)",
+          [sportId, studentUserId, req.user.id, teamLevel]
+        );
       }
-
-      await pool.query(
-        "UPDATE sport_enrollments SET squad_level=? WHERE sport_id=? AND student_user_id=?",
-        [level, sportId, studentUserId]
-      );
-
-      // Get sport name for notification
       const [sportRows] = await pool.query("SELECT name FROM sports WHERE id=?", [sportId]);
       const sportName = sportRows[0]?.name || "Unknown Sport";
-
-      const notifMessages = {
-        POOL:  `You have been selected to the ${sportName} Pool! Keep training hard.`,
-        SQUAD: `Congratulations! You have been selected to the ${sportName} Squad! 🏆`,
-        NONE:  `Your squad/pool status for ${sportName} has been updated.`,
-      };
-
       await pool.query(
         "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'SYSTEM')",
-        [
-          studentUserId,
-          `${sportName} — Level Updated`,
-          notifMessages[level],
-        ]
+        [studentUserId, `${sportName} — Team Selected`, `You have been selected for the official ${sportName} team! 🎉`]
       );
-
-      return res.json({ ok: true, level });
-    } catch (err) {
-      console.error("SET SQUAD LEVEL ERROR:", err);
-      return res.status(500).json({ message: "Internal server error" });
+    } else {
+      await pool.query("DELETE FROM student_team_assignment WHERE sport_id=? AND student_user_id=?", [sportId, studentUserId]);
     }
+    return res.json({ ok: true, inTeam });
+  } catch (err) {
+    console.error("TOGGLE TEAM ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-);
+});
 
-/**
- * POST /api/admin/squad-pool/:sportId/:studentUserId/team
- * Toggle student into / out of the team for a sport
- * Body: { inTeam: boolean }
- */
-adminRouter.post(
-  "/squad-pool/:sportId/:studentUserId/team",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  async (req, res) => {
-    try {
-      const sportId = Number(req.params.sportId);
-      const studentUserId = Number(req.params.studentUserId);
-      const inTeam = Boolean(req.body?.inTeam);
+// ─────────────────────────────────────────────────────────────
+// REPORTS — aggregated data for admin reports screen
+// GET /api/admin/reports/summary
+// ─────────────────────────────────────────────────────────────
+adminRouter.get("/reports/summary", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    // KPI
+    const [[{ totalStudents }]] = await pool.query("SELECT COUNT(*) AS totalStudents FROM users WHERE role = 'STUDENT'");
+    const [[{ totalSports }]]   = await pool.query("SELECT COUNT(*) AS totalSports FROM sports");
+    const [[{ totalSessions }]] = await pool.query("SELECT COUNT(*) AS totalSessions FROM attendance_sessions").catch(() => [[{ totalSessions: 0 }]]);
+    const [[{ eligibleCount }]] = await pool.query("SELECT COUNT(*) AS eligibleCount FROM sport_enrollments WHERE squad_level IN ('POOL','SQUAD') AND status='APPROVED'");
 
-      if (!sportId || !studentUserId) {
-        return res.status(400).json({ message: "Invalid sportId or studentUserId" });
-      }
+    // Per-sport stats
+    const [sportStats] = await pool.query(`
+      SELECT
+        s.name AS sport,
+        COUNT(DISTINCT se.student_user_id) AS enrolled,
+        ROUND(AVG(CASE WHEN pe.type = 'MATCH'      THEN pe.value END), 1) AS avg_match,
+        ROUND(AVG(CASE WHEN pe.type = 'FITNESS'    THEN pe.value END), 1) AS avg_fitness,
+        ROUND(AVG(CASE WHEN pe.type = 'DISCIPLINE' THEN pe.value END), 1) AS avg_discipline,
+        SUM(CASE WHEN se.squad_level IN ('POOL','SQUAD') THEN 1 ELSE 0 END) AS eligible
+      FROM sports s
+      LEFT JOIN sport_enrollments se ON se.sport_id = s.id AND se.status = 'APPROVED'
+      LEFT JOIN performance_entries pe ON pe.student_user_id = se.student_user_id AND pe.sport_id = s.id
+      GROUP BY s.id, s.name
+      ORDER BY s.name ASC
+    `);
 
-      if (inTeam) {
-        // Safe check-then-insert (avoids needing a unique key with INSERT IGNORE)
-        const [existing] = await pool.query(
-          "SELECT id FROM student_team_assignment WHERE sport_id=? AND student_user_id=?",
-          [sportId, studentUserId]
-        );
-        if (existing.length === 0) {
-          // Use student's actual squad level (must be POOL or SQUAD for the team level enum)
-          const [enrollRow] = await pool.query(
-            "SELECT squad_level FROM sport_enrollments WHERE sport_id=? AND student_user_id=? LIMIT 1",
-            [sportId, studentUserId]
-          );
-          const teamLevel = ["POOL","SQUAD"].includes(enrollRow[0]?.squad_level)
-            ? enrollRow[0].squad_level
-            : "SQUAD";
-          await pool.query(
-            `INSERT INTO student_team_assignment
-               (sport_id, student_user_id, assigned_by_admin_id, level)
-             VALUES (?, ?, ?, ?)`,
-            [sportId, studentUserId, req.user.id, teamLevel]
-          );
-        }
+    // Top performers across all sports
+    const [topStudents] = await pool.query(`
+      SELECT
+        u.full_name AS name,
+        s.name AS sport,
+        ROUND(AVG(pe.value), 1) AS avg_score,
+        se.squad_level
+      FROM users u
+      JOIN sport_enrollments se ON se.student_user_id = u.id AND se.status = 'APPROVED'
+      JOIN sports s ON s.id = se.sport_id
+      LEFT JOIN performance_entries pe ON pe.student_user_id = u.id AND pe.sport_id = s.id
+      GROUP BY u.id, s.id
+      HAVING avg_score IS NOT NULL
+      ORDER BY avg_score DESC
+      LIMIT 10
+    `);
 
-        // Notify student
-        const [sportRows] = await pool.query("SELECT name FROM sports WHERE id=?", [sportId]);
-        const sportName = sportRows[0]?.name || "Unknown Sport";
-        await pool.query(
-          "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'SYSTEM')",
-          [
-            studentUserId,
-            `${sportName} — Team Selected`,
-            `You have been selected for the official ${sportName} team! 🎉`,
-          ]
-        );
-      } else {
-        await pool.query(
-          "DELETE FROM student_team_assignment WHERE sport_id=? AND student_user_id=?",
-          [sportId, studentUserId]
-        );
-      }
-
-      return res.json({ ok: true, inTeam });
-    } catch (err) {
-      console.error("TOGGLE TEAM ERROR:", err);
-      return res.status(500).json({ message: "Internal server error" });
-    }
+    return res.json({
+      kpi: { totalStudents, totalSports, totalSessions, eligibleCount },
+      sportStats: sportStats.map((r) => ({
+        sport:      r.sport,
+        enrolled:   Number(r.enrolled),
+        avgMatch:   Number(r.avg_match   ?? 0),
+        avgFitness: Number(r.avg_fitness ?? 0),
+        avgDisc:    Number(r.avg_discipline ?? 0),
+        eligible:   Number(r.eligible),
+      })),
+      topStudents: topStudents.map((r) => ({
+        name:       r.name,
+        sport:      r.sport,
+        avgScore:   Number(r.avg_score ?? 0),
+        squadLevel: r.squad_level,
+      })),
+    });
+  } catch (err) {
+    console.error("REPORTS SUMMARY ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-);
+});
+
+// ─────────────────────────────────────────────────────────────
+// EVENT TEAM MEMBERS — per-event roster
+// GET    /api/admin/events/by-sport/:sportId — events for a sport
+// GET    /api/admin/event-team/:eventId       — team assigned to event
+// POST   /api/admin/event-team/:eventId/assign   — add student to event team
+// DELETE /api/admin/event-team/:eventId/:studentUserId — remove from event team
+// ─────────────────────────────────────────────────────────────
+
+// GET events by sport (joins sport_id OR name-matches sport_tag)
+adminRouter.get("/events/by-sport/:sportId", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId = Number(req.params.sportId);
+    if (!sportId) return res.status(400).json({ message: "Invalid sportId" });
+
+    // Get sport name for tag fallback matching
+    const [sportRows] = await pool.query("SELECT name FROM sports WHERE id = ?", [sportId]);
+    const sportName = sportRows[0]?.name || "";
+
+    const [rows] = await pool.query(`
+      SELECT id, title, description, sport_tag, sport_id, venue, event_date, event_time, created_at
+      FROM events
+      WHERE sport_id = ? OR (sport_id IS NULL AND sport_tag = ?)
+      ORDER BY event_date DESC, created_at DESC
+    `, [sportId, sportName]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("EVENTS BY SPORT ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET team members assigned to an event
+adminRouter.get("/event-team/:eventId", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const eventId = Number(req.params.eventId);
+    if (!eventId) return res.status(400).json({ message: "Invalid eventId" });
+
+    const [rows] = await pool.query(`
+      SELECT
+        etm.id, etm.event_id, etm.student_user_id, etm.sport_id, etm.assigned_at,
+        u.full_name, u.student_id,
+        se.squad_level,
+        COALESCE(ROUND(AVG(pe.value), 1), 0) AS avg_score
+      FROM event_team_members etm
+      JOIN users u ON u.id = etm.student_user_id
+      LEFT JOIN sport_enrollments se ON se.student_user_id = etm.student_user_id AND se.sport_id = etm.sport_id
+      LEFT JOIN performance_entries pe ON pe.student_user_id = etm.student_user_id AND pe.sport_id = etm.sport_id
+      WHERE etm.event_id = ?
+      GROUP BY etm.id, u.full_name, u.student_id, se.squad_level
+      ORDER BY avg_score DESC
+    `, [eventId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("EVENT TEAM GET ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// POST assign student to event team
+adminRouter.post("/event-team/:eventId/assign", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const eventId       = Number(req.params.eventId);
+    const studentUserId = Number(req.body?.studentUserId);
+    const sportId       = Number(req.body?.sportId);
+
+    if (!eventId || !studentUserId || !sportId)
+      return res.status(400).json({ message: "eventId, studentUserId, sportId are required" });
+
+    await pool.query(
+      `INSERT IGNORE INTO event_team_members (event_id, student_user_id, sport_id, assigned_by) VALUES (?, ?, ?, ?)`,
+      [eventId, studentUserId, sportId, req.user.id]
+    );
+
+    // Notify student
+    const [evtRows] = await pool.query("SELECT title FROM events WHERE id = ?", [eventId]);
+    const evtTitle = evtRows[0]?.title || "an event";
+    await pool.query(
+      "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'SYSTEM')",
+      [studentUserId, `Event Team Selected`, `You have been selected for the team: ${evtTitle} 🎉`]
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("EVENT TEAM ASSIGN ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// DELETE remove student from event team
+adminRouter.delete("/event-team/:eventId/:studentUserId", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const eventId       = Number(req.params.eventId);
+    const studentUserId = Number(req.params.studentUserId);
+    if (!eventId || !studentUserId)
+      return res.status(400).json({ message: "Invalid params" });
+
+    await pool.query(
+      "DELETE FROM event_team_members WHERE event_id = ? AND student_user_id = ?",
+      [eventId, studentUserId]
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("EVENT TEAM REMOVE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET squad/pool members for a sport (for event team assignment from squad)
+adminRouter.get("/squad-pool/:sportId/squad-members", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId = Number(req.params.sportId);
+    if (!sportId) return res.status(400).json({ message: "Invalid sportId" });
+
+    const [rows] = await pool.query(`
+      SELECT
+        u.id AS student_user_id, u.full_name, u.student_id,
+        se.squad_level,
+        COALESCE(ROUND(AVG(pe.value), 1), 0) AS avg_score,
+        COUNT(DISTINCT a.id) AS attendance_count
+      FROM sport_enrollments se
+      JOIN users u ON u.id = se.student_user_id
+      LEFT JOIN performance_entries pe ON pe.student_user_id = u.id AND pe.sport_id = ?
+      LEFT JOIN attendance a ON a.student_user_id = u.id AND a.sport_id = ?
+      WHERE se.sport_id = ? AND se.status = 'APPROVED' AND se.squad_level IN ('POOL', 'SQUAD')
+      GROUP BY u.id, u.full_name, u.student_id, se.squad_level
+      ORDER BY avg_score DESC
+    `, [sportId, sportId, sportId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("SQUAD MEMBERS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 module.exports = { adminRouter };
-

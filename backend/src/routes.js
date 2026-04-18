@@ -1,9 +1,24 @@
 const express = require("express");
 const { authMiddleware } = require("./middleware/auth.middleware");
 const { roleMiddleware } = require("./middleware/role.middleware");
-const { testDbConnection } = require("./db");
+const { testDbConnection, pool } = require("./db");
 
 const router = express.Router();
+
+/**
+ * ✅ PUBLIC — List all sports (no auth required, for Guest Portal)
+ */
+router.get("/sports", async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, name, venue, schedule_text, instructor_name, whatsapp_link FROM sports ORDER BY name ASC"
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error("PUBLIC SPORTS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 /**
  * ✅ Health check (public)

@@ -175,7 +175,7 @@ export default function GuestPortal() {
           </View>
 
           <TouchableOpacity
-            onPress={() => router.push("/register")}
+            onPress={() => router.replace("/register")}
             style={{ backgroundColor: theme.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}
             activeOpacity={0.85}
           >
@@ -235,7 +235,7 @@ export default function GuestPortal() {
                     {" "}welcome athletes from across the globe. 🌍
                   </Text>
                   <TouchableOpacity
-                    onPress={() => router.push("/register")}
+                    onPress={() => router.replace("/register")}
                     style={{ marginTop: 14, backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 11, alignItems: "center" }}
                     activeOpacity={0.85}
                   >
@@ -486,14 +486,14 @@ export default function GuestPortal() {
                   Create your student account and apply for your preferred sport today. Our team will review your application within 48 hours.
                 </Text>
                 <TouchableOpacity
-                  onPress={() => router.push("/register")}
+                  onPress={() => router.replace("/register")}
                   style={{ marginTop: 16, backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 32, width: "100%", alignItems: "center" }}
                   activeOpacity={0.85}
                 >
                   <Text style={{ color: "white", fontWeight: "900", fontSize: 15 }}>Create Student Account</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => router.push("/login")}
+                  onPress={() => router.replace("/login")}
                   style={{ marginTop: 10, paddingVertical: 11, width: "100%", alignItems: "center" }}
                   activeOpacity={0.7}
                 >

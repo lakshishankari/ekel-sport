@@ -23,7 +23,7 @@ export default function CreateAdvisory() {
       const { token } = await loadAuth();
       if (!token) { Alert.alert("Unauthorized", "Please login again"); router.replace("/login"); return; }
       await apiPost("/api/admin/create-advisory", { fullName, email, password }, token);
-      Alert.alert("Success ✅", "Advisory board account created successfully", [{ text: "Done", onPress: () => router.back() }]);
+      Alert.alert("Success ✅", "Advisory board account created successfully", [{ text: "Done", onPress: () => router.canGoBack() ? router.back() : router.replace("/adminHome") }]);
     } catch (e: any) { Alert.alert("Error", e?.message || "Failed to create advisory account"); }
     finally { setLoading(false); }
   }
@@ -35,7 +35,7 @@ export default function CreateAdvisory() {
     <Screen>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingBottom: 12, gap: 12 }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.bgInput, borderWidth: 1, borderColor: theme.border }} hitSlop={12}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/adminHome")} style={{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.bgInput, borderWidth: 1, borderColor: theme.border }} hitSlop={12}>
           <Ionicons name="chevron-back" size={22} color={theme.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -97,7 +97,7 @@ export default function CreateAdvisory() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={{ alignItems: "center", paddingVertical: 10 }} onPress={() => router.back()} activeOpacity={0.7}>
+          <TouchableOpacity style={{ alignItems: "center", paddingVertical: 10 }} onPress={() => router.canGoBack() ? router.back() : router.replace("/adminHome")} activeOpacity={0.7}>
             <Text style={{ color: theme.textMuted, fontSize: 14, fontWeight: "600" }}>Cancel</Text>
           </TouchableOpacity>
         </ScrollView>

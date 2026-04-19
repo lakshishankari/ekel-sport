@@ -116,7 +116,7 @@ export default function Reports() {
     <Screen>
       {/* ── Header ── */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: theme.bgInput, borderColor: theme.border }]}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/studentHome")} style={[styles.backBtn, { backgroundColor: theme.bgInput, borderColor: theme.border }]}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
         <View style={{ flex: 1 }}>

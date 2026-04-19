@@ -24,12 +24,13 @@ type Student = {
   id: string;
   name: string;
   studentId: string;
-  department: string;
   sport: string;
-  matchScore: number;
-  fitnessScore: number;
-  attendance: number;
-  discipline: number;
+  matchScore: number | null;
+  fitnessScore: number | null;
+  attendance: number | null;
+  discipline: number | null;
+  sessionsAttended: number;
+  totalSessions: number;
   overallScore: number;
   threshold: number;
   status: Status;
@@ -40,15 +41,34 @@ type Sport = { id: number; name: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function statusStyle(s: Status): { color: string; bg: string; label: string } {
-  if (s === "ELIGIBLE")   return { color: "#10B981", bg: "rgba(16,185,129,0.1)",  label: "Eligible" };
-  if (s === "BORDERLINE") return { color: "#F59E0B", bg: "rgba(245,158,11,0.1)", label: "Borderline" };
-  return                         { color: "#EF4444", bg: "rgba(239,68,68,0.1)",  label: "Not Eligible" };
+  if (s === "ELIGIBLE")   return { color: "#10B981", bg: "rgba(16,185,129,0.12)",  label: "Eligible" };
+  if (s === "BORDERLINE") return { color: "#F59E0B", bg: "rgba(245,158,11,0.12)", label: "Borderline" };
+  return                         { color: "#EF4444", bg: "rgba(239,68,68,0.12)",  label: "Not Eligible" };
 }
 
 function squadLabel(level: Student["squadLevel"]) {
   if (level === "SQUAD") return { text: "SQUAD", color: "#C9A227" };
   if (level === "POOL")  return { text: "POOL",  color: "#6366F1" };
   return                        { text: "—",     color: "#6B7280" };
+}
+
+/** Format a nullable score: shows "—" when null (no data entered yet) */
+function fmt(v: number | null): string {
+  return v != null ? String(v) : "—";
+}
+
+// ─── Mini score pill ──────────────────────────────────────────────────────────
+function ScorePill({ label, value, color, theme }: {
+  label: string; value: number | null; color: string; theme: AppTheme;
+}) {
+  return (
+    <View style={{ alignItems: "center", flex: 1 }}>
+      <Text style={{ color: theme.textMuted, fontSize: 9, fontWeight: "700", marginBottom: 3 }}>{label}</Text>
+      <View style={{ backgroundColor: color + "18", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 }}>
+        <Text style={{ color, fontSize: 13, fontWeight: "900" }}>{fmt(value)}</Text>
+      </View>
+    </View>
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -138,16 +158,16 @@ export default function AdvisoryEligibility() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/advisoryHome")} hitSlop={12} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color={theme.text} />
         </Pressable>
         <View>
           <Text style={styles.headerTitle}>Student Eligibility</Text>
-          <Text style={styles.headerSub}>Colors eligibility by sport</Text>
+          <Text style={styles.headerSub}>Colours eligibility by sport</Text>
         </View>
       </View>
 
-      {/* ── Sport tabs (dynamic) ── */}
+      {/* ── Sport tabs (horizontal scroll — NO flex-wrap) ── */}
       {loadingSports ? (
         <View style={{ paddingHorizontal: 20, paddingBottom: 10 }}>
           <ActivityIndicator color={theme.accent} />
@@ -164,7 +184,10 @@ export default function AdvisoryEligibility() {
               onPress={() => { setActiveSport(sp); setSearch(""); }}
               style={[styles.tab, activeSport?.id === sp.id && styles.tabActive]}
             >
-              <Text style={[styles.tabText, activeSport?.id === sp.id && styles.tabTextActive]}>
+              <Text
+                style={[styles.tabText, activeSport?.id === sp.id && styles.tabTextActive]}
+                numberOfLines={1}
+              >
                 {sp.name}
               </Text>
             </Pressable>
@@ -262,30 +285,43 @@ export default function AdvisoryEligibility() {
                 style={({ pressed }) => [styles.card, pressed && { opacity: 0.82 }]}
                 onPress={() => setSelected(student)}
               >
-                {/* Left: name + ID + dept */}
-                <View style={styles.cardLeft}>
+                {/* Top row: name + status */}
+                <View style={styles.cardTop}>
                   <View style={styles.avatarCircle}>
                     <Text style={styles.avatarText}>
                       {student.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.cardName}>{student.name}</Text>
+                    <Text style={styles.cardName} numberOfLines={1}>{student.name}</Text>
                     <Text style={styles.cardId}>{student.studentId || "—"}</Text>
-                    {student.department && student.department !== "—" && (
-                      <Text style={styles.cardDept}>{student.department}</Text>
-                    )}
+                  </View>
+                  <View style={{ alignItems: "flex-end", gap: 4 }}>
+                    <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
+                      <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
+                    </View>
+                    <Text style={[styles.squadTag, { color: sql.color }]}>{sql.text}</Text>
                   </View>
                 </View>
 
-                {/* Right: status + squad + score */}
-                <View style={styles.cardRight}>
-                  <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
-                    <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
+                {/* Bottom row: 4 score pills + overall */}
+                <View style={styles.cardScoresRow}>
+                  <ScorePill label="Match" value={student.matchScore} color="#C9A227" theme={theme} />
+                  <ScorePill label="Fitness" value={student.fitnessScore} color="#10B981" theme={theme} />
+                  <ScorePill label="Discipline" value={student.discipline} color="#3B82F6" theme={theme} />
+                  <ScorePill label="Attendance" value={student.attendance} color="#8B5CF6" theme={theme} />
+                  <View style={{ alignItems: "center", flex: 1 }}>
+                    <Text style={{ color: theme.textMuted, fontSize: 9, fontWeight: "700", marginBottom: 3 }}>Overall</Text>
+                    <Text style={{ color: st.color, fontSize: 14, fontWeight: "900" }}>{student.overallScore}%</Text>
                   </View>
-                  <Text style={[styles.squadTag, { color: sql.color }]}>{sql.text}</Text>
-                  <Text style={styles.scoreText}>{student.overallScore}%</Text>
                 </View>
+
+                {/* Attendance sessions note */}
+                {student.totalSessions > 0 && (
+                  <Text style={styles.sessionNote}>
+                    📅 {student.sessionsAttended}/{student.totalSessions} sessions attended
+                  </Text>
+                )}
               </Pressable>
             );
           })
@@ -320,9 +356,9 @@ export default function AdvisoryEligibility() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.sheetName}>{selected.name}</Text>
                     <Text style={styles.sheetId}>{selected.studentId || "—"}</Text>
-                    {selected.department && selected.department !== "—" && (
-                      <Text style={styles.sheetDept}>{selected.department}</Text>
-                    )}
+                    <Text style={[styles.sheetId, { color: sql.color, marginTop: 2 }]}>
+                      {sql.text !== "—" ? `Squad Level: ${sql.text}` : "Not assigned to squad"}
+                    </Text>
                   </View>
                   <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
                     <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
@@ -334,15 +370,14 @@ export default function AdvisoryEligibility() {
                   <Text style={styles.heroLabel}>Weighted Eligibility Score</Text>
                   <Text style={[styles.heroScore, { color: st.color }]}>{selected.overallScore}%</Text>
                   <Text style={styles.heroMeta}>
-                    {activeSport?.name} · Threshold {selected.threshold}% ·{" "}
-                    <Text style={{ color: sql.color }}>{sql.text}</Text>
+                    {activeSport?.name} · Threshold {selected.threshold}%
                   </Text>
                   {/* Score bar */}
                   <View style={styles.heroBg}>
                     <View
                       style={[
                         styles.heroFill,
-                        { width: `${selected.overallScore}%` as any, backgroundColor: st.color },
+                        { width: `${Math.min(selected.overallScore, 100)}%` as any, backgroundColor: st.color },
                       ]}
                     />
                     <View style={[styles.thresholdLine, { left: `${selected.threshold}%` as any }]} />
@@ -350,25 +385,43 @@ export default function AdvisoryEligibility() {
                   <Text style={styles.thresholdNote}>▲ Threshold at {selected.threshold}%</Text>
                 </View>
 
-                {/* Breakdown table */}
+                {/* Score Breakdown table */}
                 <Text style={styles.breakdownTitle}>Score Breakdown</Text>
                 <View style={styles.breakdownTable}>
                   {[
-                    { label: "Match Performance", value: selected.matchScore,   weight: 40 },
-                    { label: "Fitness Tests",      value: selected.fitnessScore, weight: 25 },
-                    { label: "Attendance",         value: selected.attendance,   weight: 20 },
-                    { label: "Discipline",         value: selected.discipline,   weight: 15 },
+                    { label: "Match Performance", value: selected.matchScore,   weight: 40,  color: "#C9A227" },
+                    { label: "Fitness Tests",      value: selected.fitnessScore, weight: 25,  color: "#10B981" },
+                    { label: "Discipline",         value: selected.discipline,   weight: 15,  color: "#3B82F6" },
+                    { label: "Attendance",         value: selected.attendance,   weight: 20,  color: "#8B5CF6" },
                   ].map((row, i, arr) => (
                     <View
                       key={row.label}
                       style={[styles.bRow, i < arr.length - 1 && styles.bRowBorder]}
                     >
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color, marginRight: 8 }} />
                       <Text style={styles.bLabel}>{row.label}</Text>
                       <Text style={styles.bWeight}>{row.weight}%</Text>
-                      <Text style={styles.bScore}>{row.value}</Text>
+                      <Text style={[styles.bScore, { color: row.value != null ? theme.text : theme.textMuted }]}>
+                        {fmt(row.value)}
+                      </Text>
                     </View>
                   ))}
                 </View>
+
+                {/* Attendance sessions */}
+                {selected.totalSessions > 0 && (
+                  <View style={styles.sessionCard}>
+                    <Ionicons name="calendar-outline" size={16} color="#8B5CF6" />
+                    <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "600", flex: 1 }}>
+                      Sessions attended: <Text style={{ color: theme.text, fontWeight: "800" }}>
+                        {selected.sessionsAttended} / {selected.totalSessions}
+                      </Text>
+                    </Text>
+                    <Text style={{ color: "#8B5CF6", fontSize: 14, fontWeight: "900" }}>
+                      {selected.attendance != null ? `${selected.attendance}%` : "—"}
+                    </Text>
+                  </View>
+                )}
 
                 <Pressable style={styles.closeBtn} onPress={() => setSelected(null)}>
                   <Text style={styles.closeBtnText}>Close</Text>
@@ -396,15 +449,18 @@ const makeStyles = (theme: AppTheme) => StyleSheet.create({
   headerTitle: { color: theme.text, fontSize: 20, fontWeight: "900" },
   headerSub:   { color: theme.textMuted, fontSize: 12, fontWeight: "600", marginTop: 2 },
 
+  // Horizontal tab row — must keep flexDirection: "row" so items lay out side-by-side.
+  // alignItems: "center" is removed from the container; each tab self-centres its text.
   tabRow: {
     paddingHorizontal: 20,
     gap: 8,
-    paddingBottom: 16,
+    paddingBottom: 12,
     flexDirection: "row",
+    alignItems: "flex-start",
   },
   tab: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 10,
     alignItems: "center",
     backgroundColor: theme.bgInput,
@@ -467,17 +523,18 @@ const makeStyles = (theme: AppTheme) => StyleSheet.create({
   retryText: { color: theme.accent, fontSize: 14, fontWeight: "800" },
 
   card: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: theme.bgCard,
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: theme.border,
-    gap: 12,
+    gap: 10,
   },
-  cardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  cardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  cardScoresRow: { flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, gap: 4 },
+  sessionNote: { color: theme.textMuted, fontSize: 10, fontWeight: "600", marginTop: 2 },
+
   avatarCircle: {
     width: 40,
     height: 40,
@@ -491,13 +548,10 @@ const makeStyles = (theme: AppTheme) => StyleSheet.create({
   avatarText: { color: theme.accent, fontSize: 13, fontWeight: "800" },
   cardName:   { color: theme.text, fontSize: 14, fontWeight: "700" },
   cardId:     { color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 2 },
-  cardDept:   { color: theme.textMuted, fontSize: 10, fontWeight: "600", marginTop: 1 },
 
-  cardRight: { alignItems: "flex-end", gap: 6 },
   statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   statusText: { fontSize: 11, fontWeight: "700" },
   squadTag:   { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  scoreText:  { color: theme.text, fontSize: 15, fontWeight: "900" },
 
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
   sheet: {
@@ -532,14 +586,13 @@ const makeStyles = (theme: AppTheme) => StyleSheet.create({
   sheetAvatarText: { color: theme.accent, fontSize: 15, fontWeight: "900" },
   sheetName:       { color: theme.text, fontSize: 16, fontWeight: "800" },
   sheetId:         { color: theme.textMuted, fontSize: 12, fontWeight: "600", marginTop: 2 },
-  sheetDept:       { color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 2 },
 
   heroCard: {
     backgroundColor: theme.bgInput,
     borderRadius: 14,
     padding: 16,
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 18,
     borderWidth: 1,
     borderColor: theme.border,
     gap: 4,
@@ -574,13 +627,25 @@ const makeStyles = (theme: AppTheme) => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
     overflow: "hidden",
-    marginBottom: 18,
+    marginBottom: 14,
   },
   bRow:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 },
   bRowBorder: { borderBottomWidth: 1, borderBottomColor: theme.border },
   bLabel:  { flex: 1, color: theme.textSub, fontSize: 13, fontWeight: "600" },
   bWeight: { color: theme.textMuted, fontSize: 12, fontWeight: "700", width: 36, textAlign: "right" },
-  bScore:  { color: theme.text, fontSize: 14, fontWeight: "900", width: 36, textAlign: "right" },
+  bScore:  { fontSize: 14, fontWeight: "900", width: 36, textAlign: "right" },
+
+  sessionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#8B5CF615",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#8B5CF630",
+  },
 
   closeBtn: {
     backgroundColor: theme.btnPrimary,

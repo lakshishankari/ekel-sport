@@ -11,18 +11,25 @@ import { apiGet } from "../lib/api";
 import Screen from "../components/Screen";
 import { useAppTheme, AppTheme } from "../lib/themeStore";
 
-type KpiData = { total: number; eligible: number; borderline: number; notEligible: number };
-type SportSummary = { sport: string; total: number; eligible: number; pct: number };
+type KpiData = {
+  totalEnrolled: number;
+  totalSports: number;
+  inSquad: number;
+  inPool: number;
+  totalSessions: number;
+  pendingEnrollments: number;
+};
 
-// ── Animated KPI card ────────────────────────────────────────────────────────
-function KpiCard({
-  label, value, color, icon, delay, theme,
+// ── Animated stat card ───────────────────────────────────────────────────────
+function StatCard({
+  label, value, subLabel, color, icon, delay, theme,
 }: {
-  label: string; value: number; color: string;
-  icon: keyof typeof Ionicons.glyphMap; delay: number; theme: AppTheme;
+  label: string; value: number | string; subLabel?: string;
+  color: string; icon: keyof typeof Ionicons.glyphMap;
+  delay: number; theme: AppTheme;
 }) {
   const fade  = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(18)).current;
+  const slide = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -35,16 +42,20 @@ function KpiCard({
     <Animated.View
       style={{
         opacity: fade, transform: [{ translateY: slide }],
-        width: 110, backgroundColor: theme.bgCard, borderRadius: 16,
+        flex: 1, minWidth: 100,
+        backgroundColor: theme.bgCard, borderRadius: 16,
         padding: 14, borderWidth: 1, borderColor: theme.border,
-        alignItems: "center", gap: 8,
+        alignItems: "center", gap: 6,
       }}
     >
-      <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: color + "22" }}>
-        <Ionicons name={icon} size={20} color={color} />
+      <View style={{ width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: color + "22" }}>
+        <Ionicons name={icon} size={19} color={color} />
       </View>
-      <Text style={{ fontSize: 24, fontWeight: "900", color }}>{value}</Text>
+      <Text style={{ fontSize: 26, fontWeight: "900", color }}>{value}</Text>
       <Text style={{ color: theme.textMuted, fontSize: 10, fontWeight: "700", textAlign: "center", lineHeight: 14 }}>{label}</Text>
+      {subLabel ? (
+        <Text style={{ color: color + "99", fontSize: 9, fontWeight: "700", textAlign: "center" }}>{subLabel}</Text>
+      ) : null}
     </Animated.View>
   );
 }
@@ -60,7 +71,7 @@ const ACTIONS = [
   },
   {
     title: "Student Eligibility",
-    subtitle: "Review and filter student colours eligibility status per sport",
+    subtitle: "Review students' eligibility status with scores per sport",
     icon: "ribbon" as const,
     route: "/advisoryEligibility",
     accent: "#10B981",
@@ -72,7 +83,6 @@ export default function AdvisoryHome() {
   const { theme, isDark } = useAppTheme();
   const [userName,   setUserName]   = useState("Advisory Board");
   const [kpi,        setKpi]        = useState<KpiData | null>(null);
-  const [sports,     setSports]     = useState<SportSummary[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
@@ -86,12 +96,8 @@ export default function AdvisoryHome() {
       if (!token || role !== "ADVISORY") { router.replace("/login"); return; }
       if (fullName) setUserName(fullName);
 
-      const [kpiData, sportData] = await Promise.all([
-        apiGet<KpiData>("/api/advisory/kpi"),
-        apiGet<SportSummary[]>("/api/advisory/sports-summary"),
-      ]);
+      const kpiData = await apiGet<KpiData>("/api/advisory/kpi");
       setKpi(kpiData);
-      setSports(sportData.filter((s) => s.total > 0));
       Animated.timing(headerFade, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     } catch (err: any) {
       setError(err?.message ?? "Failed to load dashboard");
@@ -103,15 +109,6 @@ export default function AdvisoryHome() {
 
   useEffect(() => { load(); }, []);
   const onRefresh = () => { setRefreshing(true); load(true); };
-
-  const kpiItems: { label: string; value: number; color: string; icon: keyof typeof Ionicons.glyphMap }[] = kpi
-    ? [
-        { label: "Total Students", value: kpi.total,       color: "#C9A227", icon: "people" },
-        { label: "Eligible",       value: kpi.eligible,    color: "#10B981", icon: "checkmark-circle" },
-        { label: "Borderline",     value: kpi.borderline,  color: "#F59E0B", icon: "time" },
-        { label: "Not Eligible",   value: kpi.notEligible, color: "#EF4444", icon: "close-circle" },
-      ]
-    : [];
 
   return (
     <Screen>
@@ -161,82 +158,90 @@ export default function AdvisoryHome() {
           </View>
         )}
 
-        {/* ── KPI Strip ── */}
+        {/* ── Real Stats Grid ── */}
         {!loading && !error && kpi && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 12, paddingBottom: 4 }}>
-            {kpiItems.map((k, i) => (
-              <KpiCard key={k.label} {...k} delay={i * 80} theme={theme} />
-            ))}
-          </ScrollView>
-        )}
-
-        {/* ── Eligibility Rings Overview ── */}
-        {!loading && !error && kpi && kpi.total > 0 && (
-          <View style={{ marginTop: 20, backgroundColor: theme.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: theme.border }}>
-            <Text style={{ color: theme.text, fontSize: 17, fontWeight: "900", marginBottom: 4 }}>Eligibility Overview</Text>
-            <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "600", marginBottom: 18, lineHeight: 16 }}>Distribution across all enrolled students</Text>
-
-            <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 18 }}>
-              {[
-                { label: "Eligible",     count: kpi.eligible,    color: "#10B981" },
-                { label: "Borderline",   count: kpi.borderline,  color: "#F59E0B" },
-                { label: "Not Eligible", count: kpi.notEligible, color: "#EF4444" },
-              ].map((r) => (
-                <View key={r.label} style={{ alignItems: "center", gap: 8 }}>
-                  <View style={{ width: 68, height: 68, borderRadius: 34, borderWidth: 4, borderColor: r.color, alignItems: "center", justifyContent: "center", backgroundColor: theme.bgInput }}>
-                    <Text style={{ fontSize: 15, fontWeight: "900", color: r.color }}>
-                      {kpi.total > 0 ? Math.round((r.count / kpi.total) * 100) : 0}%
-                    </Text>
-                  </View>
-                  <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "700" }}>{r.label}</Text>
-                </View>
-              ))}
+          <>
+            {/* Row 1: Enrollment stats */}
+            <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "700", marginTop: 18, marginBottom: 10, letterSpacing: 0.5 }}>
+              ENROLLMENT OVERVIEW
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <StatCard
+                label="Enrolled Students"
+                value={kpi.totalEnrolled}
+                color="#C9A227"
+                icon="people"
+                delay={0}
+                theme={theme}
+              />
+              <StatCard
+                label="Active Sports"
+                value={kpi.totalSports}
+                color="#6366F1"
+                icon="football"
+                delay={80}
+                theme={theme}
+              />
+              <StatCard
+                label="Pending Requests"
+                value={kpi.pendingEnrollments}
+                subLabel={kpi.pendingEnrollments > 0 ? "Awaiting admin" : "All cleared"}
+                color={kpi.pendingEnrollments > 0 ? "#F59E0B" : "#10B981"}
+                icon="time"
+                delay={160}
+                theme={theme}
+              />
             </View>
 
-            {/* Stacked bar */}
-            <View style={{ flexDirection: "row", height: 8, borderRadius: 4, overflow: "hidden", backgroundColor: theme.border }}>
-              {kpi.eligible > 0 && <View style={{ flex: kpi.eligible, backgroundColor: "#10B981", borderTopLeftRadius: 4, borderBottomLeftRadius: 4 }} />}
-              {kpi.borderline > 0 && <View style={{ flex: kpi.borderline, backgroundColor: "#F59E0B" }} />}
-              {kpi.notEligible > 0 && <View style={{ flex: kpi.notEligible, backgroundColor: "#EF4444", borderTopRightRadius: 4, borderBottomRightRadius: 4 }} />}
+            {/* Row 2: Performance / squad stats */}
+            <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "700", marginTop: 20, marginBottom: 10, letterSpacing: 0.5 }}>
+              SQUAD & SESSIONS
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <StatCard
+                label="In Squad"
+                value={kpi.inSquad}
+                subLabel="Squad level"
+                color="#10B981"
+                icon="ribbon"
+                delay={0}
+                theme={theme}
+              />
+              <StatCard
+                label="In Pool"
+                value={kpi.inPool}
+                subLabel="Pool level"
+                color="#8B5CF6"
+                icon="albums"
+                delay={80}
+                theme={theme}
+              />
+              <StatCard
+                label="Sessions Held"
+                value={kpi.totalSessions}
+                subLabel="All sports"
+                color="#3B82F6"
+                icon="calendar"
+                delay={160}
+                theme={theme}
+              />
             </View>
-          </View>
-        )}
-
-        {/* ── Sport Breakdown ── */}
-        {!loading && !error && sports.length > 0 && (
-          <View style={{ marginTop: 20, backgroundColor: theme.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: theme.border }}>
-            <Text style={{ color: theme.text, fontSize: 17, fontWeight: "900", marginBottom: 4 }}>Sport Breakdown</Text>
-            <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "600", marginBottom: 18, lineHeight: 16 }}>Eligibility progress per sport</Text>
-            {sports.map((s) => (
-              <View key={s.sport} style={{ marginBottom: 16 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: "800" }}>{s.sport}</Text>
-                  <Text style={{ color: theme.accent, fontSize: 14, fontWeight: "900" }}>{s.pct}%</Text>
-                </View>
-                <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.bgInput, overflow: "hidden" }}>
-                  <View style={{ width: `${s.pct}%` as any, height: 6, borderRadius: 3, backgroundColor: theme.accent }} />
-                </View>
-                <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 6 }}>
-                  {s.eligible} eligible / {s.total} enrolled
-                </Text>
-              </View>
-            ))}
-          </View>
+          </>
         )}
 
         {/* ── Empty state ── */}
-        {!loading && !error && kpi && kpi.total === 0 && (
-          <View style={{ alignItems: "center", paddingHorizontal: 16, paddingVertical: 48, gap: 8 }}>
-            <Ionicons name="people-outline" size={48} color={theme.textMuted} />
-            <Text style={{ color: theme.textSub, fontSize: 16, fontWeight: "800", marginTop: 6 }}>No enrolled students yet</Text>
-            <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: "center", lineHeight: 18 }}>
+        {!loading && !error && kpi && kpi.totalEnrolled === 0 && (
+          <View style={{ alignItems: "center", paddingHorizontal: 16, paddingVertical: 32, gap: 8, marginTop: 10 }}>
+            <Ionicons name="people-outline" size={40} color={theme.textMuted} />
+            <Text style={{ color: theme.textSub, fontSize: 15, fontWeight: "800", marginTop: 4 }}>No enrolled students yet</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: "center", lineHeight: 18 }}>
               Students will appear once they have approved sport enrollments.
             </Text>
           </View>
         )}
 
         {/* ── Quick Actions ── */}
-        <View style={{ marginTop: 20, backgroundColor: theme.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: theme.border }}>
+        <View style={{ marginTop: 24, backgroundColor: theme.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: theme.border }}>
           <Text style={{ color: theme.text, fontSize: 17, fontWeight: "900", marginBottom: 4 }}>Quick Actions</Text>
           <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "600", marginBottom: 18, lineHeight: 16 }}>Manage criteria and review student eligibility</Text>
           {ACTIONS.map((a) => (
@@ -265,7 +270,7 @@ export default function AdvisoryHome() {
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 20, padding: 14, backgroundColor: theme.accent + "12", borderRadius: 14, borderWidth: 1, borderColor: theme.accent + "33" }}>
           <Ionicons name="information-circle" size={18} color={theme.accent} />
           <Text style={{ flex: 1, color: theme.textSub, fontSize: 12, fontWeight: "600", lineHeight: 17 }}>
-            Eligibility scores are calculated using configurable weightages across match performance, fitness, attendance, and discipline criteria. Set weightages per sport using Criteria Weightages.
+            Eligibility scores are calculated using configurable weightages across match performance, fitness, attendance, and discipline. Use Criteria Weightages to set thresholds per sport.
           </Text>
         </View>
       </ScrollView>

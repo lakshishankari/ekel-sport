@@ -122,7 +122,7 @@ export default function AdminHome() {
   };
   const navigateDrawer = (route: string) => {
     closeDrawer();
-    setTimeout(() => router.push(route as any), 220);
+    setTimeout(() => router.replace(route as any), 220);
   };
 
   const adminInitials = userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
@@ -280,29 +280,34 @@ export default function AdminHome() {
         backgroundColor: theme.bgCard,
         borderTopWidth: 1, borderTopColor: theme.border,
         paddingTop: 8,
-        paddingBottom: Platform.OS === "ios" ? 20 : 10,
+        paddingBottom: Platform.OS === "ios" ? 24 : 10,
+        shadowColor: "#000",
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: -3 },
+        elevation: 8,
       }}>
         {BOTTOM_TABS.map((tab) => {
           if (tab.isCreate) {
             return (
               <TouchableOpacity
                 key={tab.route}
-                onPress={() => router.push(tab.route as any)}
+                onPress={() => router.replace(tab.route as any)}
                 style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
                 activeOpacity={0.8}
               >
                 <View style={{
-                  width: 50, height: 50, borderRadius: 25,
+                  width: 52, height: 52, borderRadius: 26,
                   backgroundColor: theme.accent,
                   alignItems: "center", justifyContent: "center",
-                  marginTop: -24,
+                  marginTop: -26,
                   shadowColor: theme.accent,
                   shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.45, shadowRadius: 8, elevation: 8,
+                  shadowOpacity: 0.45, shadowRadius: 10, elevation: 10,
                 }}>
-                  <Ionicons name="add" size={30} color="white" />
+                  <Ionicons name="add" size={28} color="white" />
                 </View>
-                <Text style={{ color: theme.textSub, fontSize: 10, marginTop: 4, fontWeight: "600" }}>
+                <Text style={{ color: theme.textSub, fontSize: 10, marginTop: 5, fontWeight: "600" }}>
                   {tab.label}
                 </Text>
               </TouchableOpacity>
@@ -312,12 +317,26 @@ export default function AdminHome() {
           return (
             <TouchableOpacity
               key={tab.route}
-              onPress={() => router.push(tab.route as any)}
-              style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 2 }}
+              onPress={() => router.replace(tab.route as any)}
+              style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 2, position: "relative" }}
               activeOpacity={0.7}
             >
-              <Ionicons name={tab.icon} size={24} color={isActive ? theme.accent : theme.textSub} />
-              <Text style={{ color: isActive ? theme.accent : theme.textSub, fontSize: 10, marginTop: 3, fontWeight: isActive ? "700" : "500" }}>
+              {/* Active top indicator */}
+              {isActive && (
+                <View style={{
+                  position: "absolute", top: -8,
+                  width: 28, height: 3, borderRadius: 2,
+                  backgroundColor: theme.accent,
+                }} />
+              )}
+              <View style={{
+                width: 36, height: 36, borderRadius: 10,
+                alignItems: "center", justifyContent: "center",
+                backgroundColor: isActive ? theme.accent + "1A" : "transparent",
+              }}>
+                <Ionicons name={tab.icon} size={22} color={isActive ? theme.accent : theme.textSub} />
+              </View>
+              <Text style={{ color: isActive ? theme.accent : theme.textSub, fontSize: 10, marginTop: 2, fontWeight: isActive ? "800" : "500" }}>
                 {tab.label}
               </Text>
             </TouchableOpacity>

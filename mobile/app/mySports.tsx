@@ -85,7 +85,7 @@ export default function MySports() {
   if (loading) {
     return (
       <StudentScreen activeRoute="/mySports">
-        <AppHeader title="My Sports" subtitle="Your approved sports" />
+        <AppHeader title="My Sports" subtitle="Your approved sports" showBack={false} />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={theme.accent} />
           <Text style={{ color: theme.textSub, marginTop: 12, fontSize: 14 }}>Loading your sports...</Text>
@@ -97,7 +97,7 @@ export default function MySports() {
   if (error) {
     return (
       <StudentScreen activeRoute="/mySports">
-        <AppHeader title="My Sports" subtitle="Your approved sports" />
+        <AppHeader title="My Sports" subtitle="Your approved sports" showBack={false} />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
           <Ionicons name="wifi-outline" size={56} color="#EF4444" />
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 16, textAlign: "center" }}>Connection Error</Text>
@@ -115,7 +115,7 @@ export default function MySports() {
 
   return (
     <StudentScreen activeRoute="/mySports">
-      <AppHeader title="My Sports" subtitle={`${items.length} approved sport${items.length !== 1 ? "s" : ""}`} />
+      <AppHeader title="My Sports" subtitle={`${items.length} approved sport${items.length !== 1 ? "s" : ""}`} showBack={false} />
 
       <FlatList
         data={items}

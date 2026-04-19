@@ -43,7 +43,6 @@ export default function RootLayout() {
 
       {/* Advisory */}
       <Stack.Screen name="advisoryWeightages" />
-      <Stack.Screen name="advisoryDashboard" />
 
       {/* Student */}
       <Stack.Screen name="studentSports" />
@@ -78,6 +77,7 @@ export default function RootLayout() {
       <Stack.Screen name="advisoryEligibility" />
 
       {/* Shared */}
+      <Stack.Screen name="guestPortal" />
       <Stack.Screen name="reports" />
       <Stack.Screen name="help" />
 

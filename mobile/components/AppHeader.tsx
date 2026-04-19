@@ -8,12 +8,22 @@ type Props = {
   title: string;
   subtitle?: string;
   showBack?: boolean;
+  /** Fallback route when there is no stack to go back to (e.g. reached via router.replace) */
+  backRoute?: string;
   rightSlot?: React.ReactNode;
 };
 
-export default function AppHeader({ title, subtitle, showBack = true, rightSlot }: Props) {
+export default function AppHeader({ title, subtitle, showBack = true, backRoute, rightSlot }: Props) {
   const router = useRouter();
   const { theme } = useAppTheme();
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (backRoute) {
+      router.replace(backRoute as any);
+    }
+  };
 
   return (
     <View style={{ paddingTop: 6, paddingBottom: 14 }}>
@@ -21,7 +31,7 @@ export default function AppHeader({ title, subtitle, showBack = true, rightSlot 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
           {showBack ? (
             <Pressable
-              onPress={() => router.back()}
+              onPress={handleBack}
               style={({ pressed }) => [
                 {
                   width: 38,

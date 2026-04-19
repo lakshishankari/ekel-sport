@@ -10,68 +10,54 @@ const guard = [authMiddleware, roleMiddleware(["ADVISORY"])];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // GET /api/advisory/kpi
-// Returns overall eligibility KPI counts across all sports
+// Returns real dashboard stats for the advisory board
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 advisoryRouter.get("/kpi", ...guard, async (req, res) => {
   try {
-    // Count total distinct APPROVED students across all sports
-    const [totalRows] = await pool.query(`
-      SELECT COUNT(DISTINCT student_user_id) AS total
-      FROM sport_enrollments
-      WHERE status = 'APPROVED'
+    // Total distinct APPROVED enrolled students
+    const [[{ totalEnrolled }]] = await pool.query(`
+      SELECT COUNT(DISTINCT student_user_id) AS totalEnrolled
+      FROM sport_enrollments WHERE status = 'APPROVED'
     `);
 
-    // Count by eligibility status (uses colors_eligibility if exists, else squad_level)
-    const [byStatus] = await pool.query(`
-      SELECT
-        SUM(CASE WHEN squad_level = 'SQUAD' THEN 1 ELSE 0 END) AS eligible,
-        SUM(CASE WHEN squad_level = 'POOL'  THEN 1 ELSE 0 END) AS borderline,
-        SUM(CASE WHEN squad_level = 'NONE'  THEN 1 ELSE 0 END) AS not_eligible
-      FROM sport_enrollments
-      WHERE status = 'APPROVED'
+    // Total sports in system
+    const [[{ totalSports }]] = await pool.query(`
+      SELECT COUNT(*) AS totalSports FROM sports
     `);
 
-    const total       = Number(totalRows[0]?.total ?? 0);
-    const eligible    = Number(byStatus[0]?.eligible ?? 0);
-    const borderline  = Number(byStatus[0]?.borderline ?? 0);
-    const notEligible = Number(byStatus[0]?.not_eligible ?? 0);
+    // Students in SQUAD level
+    const [[{ inSquad }]] = await pool.query(`
+      SELECT COUNT(DISTINCT student_user_id) AS inSquad
+      FROM sport_enrollments WHERE status = 'APPROVED' AND squad_level = 'SQUAD'
+    `);
 
-    return res.json({ total, eligible, borderline, notEligible });
+    // Students in POOL level
+    const [[{ inPool }]] = await pool.query(`
+      SELECT COUNT(DISTINCT student_user_id) AS inPool
+      FROM sport_enrollments WHERE status = 'APPROVED' AND squad_level = 'POOL'
+    `);
+
+    // Total sessions held across all sports
+    const [[{ totalSessions }]] = await pool.query(`
+      SELECT COUNT(*) AS totalSessions FROM attendance_sessions
+    `);
+
+    // Pending enrollment requests
+    const [[{ pendingEnrollments }]] = await pool.query(`
+      SELECT COUNT(*) AS pendingEnrollments
+      FROM sport_enrollments WHERE status = 'PENDING'
+    `);
+
+    return res.json({
+      totalEnrolled:     Number(totalEnrolled),
+      totalSports:       Number(totalSports),
+      inSquad:           Number(inSquad),
+      inPool:            Number(inPool),
+      totalSessions:     Number(totalSessions),
+      pendingEnrollments: Number(pendingEnrollments),
+    });
   } catch (err) {
     console.error("ADVISORY KPI ERROR:", err);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// GET /api/advisory/sports-summary
-// Returns per-sport eligible/total counts for the home dashboard
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-advisoryRouter.get("/sports-summary", ...guard, async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT
-        s.id,
-        s.name AS sport,
-        COUNT(se.id)                                             AS total,
-        SUM(CASE WHEN se.squad_level IN ('POOL','SQUAD') THEN 1 ELSE 0 END) AS eligible
-      FROM sports s
-      LEFT JOIN sport_enrollments se
-        ON se.sport_id = s.id AND se.status = 'APPROVED'
-      GROUP BY s.id, s.name
-      ORDER BY s.name ASC
-    `);
-
-    const result = rows.map((r) => ({
-      sport:    r.sport,
-      total:    Number(r.total),
-      eligible: Number(r.eligible),
-      pct:      r.total > 0 ? Math.round((Number(r.eligible) / Number(r.total)) * 100) : 0,
-    }));
-
-    return res.json(result);
-  } catch (err) {
-    console.error("ADVISORY SPORTS SUMMARY ERROR:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -87,6 +73,12 @@ advisoryRouter.get("/eligibility", ...guard, async (req, res) => {
       return res.status(400).json({ message: "sportId query param is required" });
     }
 
+    // Total sessions for this sport (for attendance % calculation)
+    const [[{ totalSessions }]] = await pool.query(
+      "SELECT COUNT(*) AS totalSessions FROM attendance_sessions WHERE sport_id = ?",
+      [sportId]
+    );
+
     const [rows] = await pool.query(
       `
       SELECT
@@ -98,13 +90,10 @@ advisoryRouter.get("/eligibility", ...guard, async (req, res) => {
         ROUND(AVG(CASE WHEN pe.type = 'FITNESS'    THEN pe.value END), 1) AS fitnessScore,
         ROUND(AVG(CASE WHEN pe.type = 'DISCIPLINE' THEN pe.value END), 1) AS discipline,
         (
-          SELECT ROUND(
-            (COUNT(a2.id) * 100.0) /
-            NULLIF((SELECT COUNT(*) FROM attendance_sessions WHERE sport_id = ?), 0)
-          , 1)
+          SELECT COUNT(a2.id)
           FROM attendance a2
-          WHERE a2.student_user_id = u.id AND a2.sport_id = ?
-        ) AS attendance
+          WHERE a2.student_user_id = u.id AND a2.sport_id = ? AND a2.status = 'PRESENT'
+        ) AS sessionsAttended
       FROM sport_enrollments se
       JOIN users u ON u.id = se.student_user_id
       LEFT JOIN performance_entries pe
@@ -113,39 +102,47 @@ advisoryRouter.get("/eligibility", ...guard, async (req, res) => {
       GROUP BY u.id, u.full_name, u.student_id, se.squad_level
       ORDER BY se.squad_level DESC, u.full_name ASC
       `,
-      [sportId, sportId, sportId, sportId]
+      [sportId, sportId, sportId]
     );
 
-    // Derive status from squad_level
+    const sessTotal = Number(totalSessions) || 0;
+
     const students = rows.map((r) => {
-      const match    = Number(r.matchScore    ?? 50);
-      const fitness  = Number(r.fitnessScore  ?? 50);
-      const attend   = Number(r.attendance    ?? 50);
-      const disc     = Number(r.discipline    ?? 50);
-      // Default weights: match 40, fitness 25, attendance 20, discipline 15
-      const overall  = Math.round(match * 0.4 + fitness * 0.25 + attend * 0.2 + disc * 0.15);
+      const match    = r.matchScore   != null ? Number(r.matchScore)   : null;
+      const fitness  = r.fitnessScore != null ? Number(r.fitnessScore) : null;
+      const disc     = r.discipline   != null ? Number(r.discipline)   : null;
+      const sessAtt  = Number(r.sessionsAttended ?? 0);
+      const attend   = sessTotal > 0 ? Math.round((sessAtt / sessTotal) * 100) : null;
+
+      // Use actual saved values for calculation; fall back to 50 only for the weighted score
+      const mW = match   ?? 50;
+      const fW = fitness ?? 50;
+      const aW = attend  ?? 50;
+      const dW = disc    ?? 50;
+      const overall = Math.round(mW * 0.4 + fW * 0.25 + aW * 0.2 + dW * 0.15);
       const threshold = 60;
 
       let status = "NOT_ELIGIBLE";
-      if (r.squadLevel === "SQUAD") status = "ELIGIBLE";
-      else if (r.squadLevel === "POOL") status  = "BORDERLINE";
-      else if (overall >= threshold)    status  = "ELIGIBLE";
-      else if (overall >= threshold - 10) status = "BORDERLINE";
+      if (r.squadLevel === "SQUAD")         status = "ELIGIBLE";
+      else if (r.squadLevel === "POOL")     status = "BORDERLINE";
+      else if (overall >= threshold)        status = "ELIGIBLE";
+      else if (overall >= threshold - 10)   status = "BORDERLINE";
 
       return {
-        id:           String(r.id),
-        name:         r.name,
-        studentId:    r.studentId ?? "—",
-        department:   "—",          // Not stored in DB yet
-        sport:        String(sportId),
-        matchScore:   match,
-        fitnessScore: fitness,
-        attendance:   attend,
-        discipline:   disc,
-        overallScore: overall,
+        id:               String(r.id),
+        name:             r.name,
+        studentId:        r.studentId ?? "—",
+        sport:            String(sportId),
+        matchScore:       match,
+        fitnessScore:     fitness,
+        attendance:       attend,
+        discipline:       disc,
+        sessionsAttended: sessAtt,
+        totalSessions:    sessTotal,
+        overallScore:     overall,
         threshold,
         status,
-        squadLevel: r.squadLevel ?? "NONE",
+        squadLevel:       r.squadLevel ?? "NONE",
       };
     });
 
@@ -171,14 +168,9 @@ advisoryRouter.get("/weightages/:sportId", ...guard, async (req, res) => {
     );
 
     if (rows.length === 0) {
-      // Return defaults
       return res.json({
         sportId,
-        match:      40,
-        fitness:    25,
-        attendance: 20,
-        discipline: 15,
-        threshold:  60,
+        match: 40, fitness: 25, attendance: 20, discipline: 15, threshold: 60,
       });
     }
 
@@ -192,7 +184,6 @@ advisoryRouter.get("/weightages/:sportId", ...guard, async (req, res) => {
       threshold:  w.threshold,
     });
   } catch (err) {
-    // Table may not exist yet — return defaults gracefully
     console.warn("ADVISORY WEIGHTAGES GET (table may not exist):", err.message);
     return res.json({
       sportId: Number(req.params.sportId),
@@ -222,7 +213,6 @@ advisoryRouter.post("/weightages/:sportId", ...guard, async (req, res) => {
       return res.status(400).json({ message: `Weights must sum to 100 (got ${total})` });
     }
 
-    // Ensure table exists (create on first use)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS advisory_weightages (
         id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -238,18 +228,16 @@ advisoryRouter.post("/weightages/:sportId", ...guard, async (req, res) => {
     `);
 
     await pool.query(
-      `
-      INSERT INTO advisory_weightages
+      `INSERT INTO advisory_weightages
         (sport_id, match_weight, fitness_weight, attendance_weight, discipline_weight, threshold, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
         match_weight      = VALUES(match_weight),
         fitness_weight    = VALUES(fitness_weight),
         attendance_weight = VALUES(attendance_weight),
         discipline_weight = VALUES(discipline_weight),
         threshold         = VALUES(threshold),
-        updated_by        = VALUES(updated_by)
-      `,
+        updated_by        = VALUES(updated_by)`,
       [sportId, match, fitness, attendance, discipline, threshold, req.user.id]
     );
 

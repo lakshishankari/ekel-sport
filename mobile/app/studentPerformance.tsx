@@ -200,7 +200,7 @@ export default function StudentPerformance() {
       {/* ── Header ── */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, gap: 12 }}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace("/studentHome")}
           style={({ pressed }) => [{
             width: 40, height: 40, borderRadius: 12,
             alignItems: "center", justifyContent: "center",

@@ -58,7 +58,7 @@ export default function AdminEnrollments() {
   if (loading) {
     return (
       <Screen>
-        <AppHeader title="Enrollments" subtitle="Approve or reject student requests" />
+      <AppHeader title="Enrollments" subtitle="Approve or reject student requests" backRoute="/adminHome" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={theme.accent} />
         </View>
@@ -69,7 +69,7 @@ export default function AdminEnrollments() {
   if (error) {
     return (
       <Screen>
-        <AppHeader title="Enrollments" subtitle="Approve or reject student requests" />
+      <AppHeader title="Enrollments" subtitle="Approve or reject student requests" backRoute="/adminHome" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
           <Ionicons name="wifi-outline" size={56} color="#EF4444" />
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 16 }}>Connection Error</Text>
@@ -84,7 +84,7 @@ export default function AdminEnrollments() {
 
   return (
     <Screen>
-      <AppHeader title="Enrollments" subtitle={`${items.length} pending request${items.length !== 1 ? "s" : ""}`} />
+      <AppHeader title="Enrollments" subtitle={`${items.length} pending request${items.length !== 1 ? "s" : ""}`} backRoute="/adminHome" />
       <FlatList
         data={items}
         keyExtractor={(x) => String(x.enrollment_id)}

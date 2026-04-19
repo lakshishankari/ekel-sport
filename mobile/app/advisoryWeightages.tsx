@@ -133,7 +133,7 @@ export default function AdvisoryWeightages() {
     return (
       <Screen>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/advisoryHome")} style={styles.backBtn} hitSlop={10}>
             <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
           <View style={{ flex: 1 }}>
@@ -152,7 +152,7 @@ export default function AdvisoryWeightages() {
     return (
       <Screen>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/advisoryHome")} style={styles.backBtn} hitSlop={10}>
             <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
           <View style={{ flex: 1 }}>
@@ -226,7 +226,7 @@ export default function AdvisoryWeightages() {
     <Screen style={{ paddingHorizontal: 0, paddingTop: 0 }}>
       {/* ── Header ── */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/advisoryHome")} style={styles.backBtn} hitSlop={10}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
         <View style={{ flex: 1 }}>

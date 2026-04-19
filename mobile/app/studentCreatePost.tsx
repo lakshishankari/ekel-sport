@@ -112,7 +112,7 @@ export default function StudentCreatePost() {
 
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 48, paddingBottom: 14, backgroundColor: theme.bgCard, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/studentHome")} style={{ marginRight: 16 }} activeOpacity={0.7}>
           <Ionicons name="close" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", flex: 1 }}>Create Post</Text>

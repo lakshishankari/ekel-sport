@@ -65,6 +65,7 @@ export default function AdminReports() {
         title="Reports & Analytics"
         subtitle="Live overview · Academic Year 2025/26"
         showBack
+        backRoute="/adminHome"
       />
 
       {loading && !refreshing ? (

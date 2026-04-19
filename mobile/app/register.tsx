@@ -120,7 +120,7 @@ export default function RegisterScreen() {
         <Text style={{ color: theme.textSub, textDecorationLine: "underline" }}>Already have an account? Login</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={{ marginTop: 14, alignSelf: "center" }} onPress={() => router.push("/")}>
+      <TouchableOpacity style={{ marginTop: 14, alignSelf: "center" }} onPress={() => router.replace("/")}>
         <Text style={{ color: theme.textSub, textDecorationLine: "underline" }}>Back</Text>
       </TouchableOpacity>
     </ScrollView>

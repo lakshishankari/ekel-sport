@@ -97,7 +97,7 @@ export default function AdminSports() {
 
   return (
     <Screen>
-      <AppHeader title="Manage Sports" subtitle="Add sports and view existing ones" />
+      <AppHeader title="Manage Sports" subtitle="Add sports and view existing ones" backRoute="/adminHome" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <FlatList
           data={sports}

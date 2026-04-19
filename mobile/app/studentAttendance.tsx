@@ -126,7 +126,7 @@ export default function StudentAttendance() {
   return (
     <StudentScreen activeRoute="/studentAttendance">
       {/* Header */}
-      <AppHeader title="My Attendance" subtitle="Track your sports attendance" />
+      <AppHeader title="My Attendance" subtitle="Track your sports attendance" showBack={false} />
 
       {/* Tab bar */}
       <View style={{

@@ -46,7 +46,7 @@ export default function AdminUsers() {
   if (loading) {
     return (
       <Screen>
-        <AppHeader title="All Users" subtitle="Registered accounts" />
+      <AppHeader title={`${users.length} registered accounts`} subtitle="Registered accounts" backRoute="/adminHome" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={theme.accent} />
         </View>
@@ -57,7 +57,7 @@ export default function AdminUsers() {
   if (error) {
     return (
       <Screen>
-        <AppHeader title="All Users" subtitle="Registered accounts" />
+      <AppHeader title={`${users.length} registered accounts`} subtitle="Registered accounts" backRoute="/adminHome" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
           <Ionicons name="wifi-outline" size={56} color="#EF4444" />
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 16 }}>Connection Error</Text>
@@ -72,7 +72,7 @@ export default function AdminUsers() {
 
   return (
     <Screen>
-      <AppHeader title="All Users" subtitle={`${users.length} registered accounts`} />
+      <AppHeader title="All Users" subtitle={`${users.length} registered accounts`} backRoute="/adminHome" />
       <FlatList
         data={users}
         keyExtractor={(item) => item.id.toString()}

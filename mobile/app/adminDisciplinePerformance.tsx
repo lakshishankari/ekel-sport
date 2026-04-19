@@ -114,6 +114,9 @@ export default function AdminDisciplinePerformance() {
     if (!sportId) { Alert.alert("Error", "Please select a sport first."); return; }
     const validRows = rows.filter((r) => r.value.trim() !== "");
     if (validRows.length === 0) { Alert.alert("Error", "Please enter at least one discipline value."); return; }
+    // Validate 0–100 range
+    const outOfRange = validRows.find((r) => { const n = Number(r.value); return isNaN(n) || n < 0 || n > 100; });
+    if (outOfRange) { Alert.alert("Invalid Score", `"${outOfRange.value}" is out of range. All scores must be between 0 and 100.`); return; }
     setSaving(true);
     try {
       await apiPost("/api/admin/performance/batch", {

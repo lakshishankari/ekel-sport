@@ -1,17 +1,17 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable,
-  Share, Alert, ActivityIndicator, RefreshControl,
+  View, Text, ScrollView, Pressable,
+  ActivityIndicator, RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { loadAuth } from "../lib/authStore";
 import { apiGet } from "../lib/api";
 import Screen from "../components/Screen";
+import AppHeader from "../components/AppHeader";
 import { useAppTheme } from "../lib/themeStore";
 
-type Tab = "overview" | "attendance" | "performance";
-
+// ─── Types ────────────────────────────────────────────────────
 type SportStat = {
   sport: string; enrolled: number;
   avgMatch: number; avgFitness: number; avgDisc: number; eligible: number;
@@ -20,15 +20,19 @@ type TopStudent = { name: string; sport: string; avgScore: number; squadLevel: s
 type KPI = { totalStudents: number; totalSports: number; totalSessions: number; eligibleCount: number };
 type ReportData = { kpi: KPI; sportStats: SportStat[]; topStudents: TopStudent[] };
 
-function scoreColor(v: number) {
-  if (v >= 80) return "#10B981";
-  if (v >= 60) return "#C9A227";
-  return "#EF4444";
-}
+type SquadLevel = "NONE" | "POOL" | "SQUAD";
+const LEVEL_COLOR: Record<SquadLevel, string> = {
+  NONE:  "#6B7280",
+  POOL:  "#60A5FA",
+  SQUAD: "#D4AF37",
+};
 
+function levelColor(l: string) { return LEVEL_COLOR[(l as SquadLevel)] ?? "#6B7280"; }
+function scoreColor(v: number) { return v >= 80 ? "#10B981" : v >= 60 ? "#D4AF37" : "#EF4444"; }
+
+// ─── Component ────────────────────────────────────────────────
 export default function AdminReports() {
   const { theme } = useAppTheme();
-  const [tab, setTab]           = useState<Tab>("overview");
   const [data, setData]         = useState<ReportData | null>(null);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,289 +51,195 @@ export default function AdminReports() {
   useEffect(() => { load(); }, [load]);
   const onRefresh = () => { setRefreshing(true); load(true); };
 
-  const handleExport = async () => {
-    if (!data) return;
-    const lines = [
-      "Sport,Enrolled,Avg Match,Avg Fitness,Avg Discipline,Eligible",
-      ...data.sportStats.map(
-        (s) => `${s.sport},${s.enrolled},${s.avgMatch},${s.avgFitness},${s.avgDisc},${s.eligible}`
-      ),
-    ].join("\n");
-    try {
-      await Share.share({ message: lines, title: "EKEL-Sport Report" });
-    } catch {
-      Alert.alert("Export failed", "Unable to share the report.");
-    }
-  };
-
+  // ─── KPI cards config
   const KPI_CARDS = data ? [
-    { label: "Total Students",  value: String(data.kpi.totalStudents),  sub: "Registered",       color: "#C9A227" },
-    { label: "Active Sports",   value: String(data.kpi.totalSports),    sub: "Modules running",  color: "#10B981" },
-    { label: "Sessions Held",   value: String(data.kpi.totalSessions),  sub: "QR sessions",      color: "#6366F1" },
-    { label: "Colors Eligible", value: String(data.kpi.eligibleCount),  sub: "Pool + Squad",     color: "#F59E0B" },
+    { label: "Total Students",  value: String(data.kpi.totalStudents),  icon: "people"            as const, color: "#D4AF37", bg: "rgba(212,175,55,0.12)"  },
+    { label: "Active Sports",   value: String(data.kpi.totalSports),    icon: "football"          as const, color: "#10B981", bg: "rgba(16,185,129,0.12)"  },
+    { label: "Sessions Held",   value: String(data.kpi.totalSessions),  icon: "calendar-number"   as const, color: "#6366F1", bg: "rgba(99,102,241,0.12)"  },
+    { label: "Colors Eligible", value: String(data.kpi.eligibleCount),  icon: "shield-checkmark"  as const, color: "#F59E0B", bg: "rgba(245,158,11,0.12)"  },
   ] : [];
 
   return (
     <Screen>
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color="#F9FAFB" />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Reports & Analytics</Text>
-          <Text style={styles.headerSub}>Live data · Academic Year 2025/26</Text>
-        </View>
-        <Pressable onPress={handleExport} style={styles.exportBtn} hitSlop={10}>
-          <Ionicons name="share-outline" size={19} color="#C9A227" />
-        </Pressable>
-      </View>
-
-      {/* ── Tabs ── */}
-      <View style={styles.tabRow}>
-        {(["overview", "attendance", "performance"] as Tab[]).map((t) => (
-          <Pressable key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === "overview" ? "Overview" : t === "attendance" ? "Attendance" : "Performance"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <AppHeader
+        title="Reports & Analytics"
+        subtitle="Live overview · Academic Year 2025/26"
+        showBack
+      />
 
       {loading && !refreshing ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={theme.accent} />
-          <Text style={{ color: theme.textMuted, marginTop: 12, fontWeight: "600" }}>Loading live data...</Text>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <ActivityIndicator size="large" color="#D4AF37" />
+          <Text style={{ color: theme.textMuted, fontWeight: "600" }}>Loading live data…</Text>
         </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#C9A227" colors={["#C9A227"]} />}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 48 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing} onRefresh={onRefresh}
+              tintColor="#D4AF37" colors={["#D4AF37"]}
+            />
+          }
         >
-
-          {/* ══ OVERVIEW ══ */}
-          {tab === "overview" && (
-            <>
-              {/* KPI grid */}
-              <View style={styles.kpiGrid}>
-                {KPI_CARDS.map((k) => (
-                  <View key={k.label} style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
-                    <Text style={[styles.kpiValue, { color: k.color }]}>{k.value}</Text>
-                    <Text style={[styles.kpiLabel, { color: theme.text }]}>{k.label}</Text>
-                    <Text style={[styles.kpiSub, { color: theme.textMuted }]}>{k.sub}</Text>
-                  </View>
-                ))}
+          {/* ── KPI Grid ── */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+            {KPI_CARDS.map((k) => (
+              <View
+                key={k.label}
+                style={{
+                  width: "47%", borderRadius: 20, padding: 16,
+                  borderWidth: 1, backgroundColor: theme.bgCard,
+                  borderColor: theme.border, gap: 10,
+                }}
+              >
+                <View style={{
+                  width: 42, height: 42, borderRadius: 13,
+                  backgroundColor: k.bg, alignItems: "center", justifyContent: "center",
+                }}>
+                  <Ionicons name={k.icon} size={20} color={k.color} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 28, fontWeight: "900", color: k.color }}>{k.value}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text, marginTop: 2 }}>{k.label}</Text>
+                </View>
               </View>
+            ))}
+          </View>
 
-              {/* Enrollment by sport */}
-              {data && data.sportStats.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Enrollment by Sport</Text>
-                  {data.sportStats.map((s) => (
-                    <View key={s.sport} style={styles.enrollRow}>
-                      <Text style={[styles.enrollSport, { color: theme.textSub }]}>{s.sport}</Text>
-                      <View style={[styles.enrollBarBg, { backgroundColor: theme.bgInput }]}>
-                        <View style={[styles.enrollBarFill, { width: `${Math.min(100, (s.enrolled / Math.max(...data.sportStats.map((x) => x.enrolled), 1)) * 100)}%` as any }]} />
-                      </View>
-                      <Text style={[styles.enrollCount, { color: theme.text }]}>{s.enrolled}</Text>
+          {/* ── Enrollment by Sport ── */}
+          {data && data.sportStats.length > 0 && (
+            <View style={{
+              borderRadius: 20, borderWidth: 1,
+              backgroundColor: theme.bgCard, borderColor: theme.border,
+              padding: 16, marginBottom: 14,
+            }}>
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "900", marginBottom: 14 }}>
+                Enrollment by Sport
+              </Text>
+              {data.sportStats.map((s, i) => {
+                const maxEnrolled = Math.max(...data.sportStats.map((x) => x.enrolled), 1);
+                const pct = Math.round((s.enrolled / maxEnrolled) * 100);
+                return (
+                  <View key={s.sport} style={{ marginBottom: i < data.sportStats.length - 1 ? 14 : 0 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "800" }}>{s.sport}</Text>
+                      <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "700" }}>
+                        {s.enrolled} enrolled
+                      </Text>
                     </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Top performers */}
-              {data && data.topStudents.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Top Performers</Text>
-                  <View style={[styles.table, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
-                    <View style={[styles.tableRow, styles.tableHead, { backgroundColor: theme.bgInput }]}>
-                      <Text style={[styles.tableCell, styles.tableHeadText, { flex: 2, color: theme.textMuted }]}>Student</Text>
-                      <Text style={[styles.tableCell, styles.tableHeadText, { color: theme.textMuted }]}>Sport</Text>
-                      <Text style={[styles.tableCell, styles.tableHeadText, { textAlign: "right", color: theme.textMuted }]}>Score</Text>
+                    <View style={{
+                      height: 7, borderRadius: 4, overflow: "hidden",
+                      backgroundColor: theme.bgInput,
+                    }}>
+                      <View style={{
+                        width: `${pct}%` as any,
+                        height: "100%", borderRadius: 4, backgroundColor: "#D4AF37",
+                      }} />
                     </View>
-                    {data.topStudents.slice(0, 8).map((s, i) => (
-                      <View key={i} style={[styles.tableRow, i < data.topStudents.length - 1 && styles.tableRowBorder, { borderTopColor: theme.border }]}>
-                        <Text style={[styles.tableCell, styles.tableName, { flex: 2, color: theme.text }]}>{s.name}</Text>
-                        <Text style={[styles.tableCell, styles.tableSport, { color: theme.textSub }]}>{s.sport}</Text>
-                        <Text style={[styles.tableCell, { textAlign: "right", color: scoreColor(s.avgScore), fontWeight: "900", fontSize: 14 }]}>
-                          {s.avgScore > 0 ? `${s.avgScore}` : "—"}
-                        </Text>
-                      </View>
-                    ))}
+                    <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 4 }}>
+                      {s.eligible} eligible (Pool + Squad)
+                    </Text>
                   </View>
-                </View>
-              )}
-
-              {data && data.sportStats.length === 0 && (
-                <View style={{ alignItems: "center", paddingVertical: 60 }}>
-                  <Ionicons name="bar-chart-outline" size={48} color={theme.border} />
-                  <Text style={{ color: theme.textSub, marginTop: 12, fontWeight: "700", fontSize: 15 }}>No data yet</Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 4 }}>Add students, sports, and performance entries to see reports.</Text>
-                </View>
-              )}
-            </>
+                );
+              })}
+            </View>
           )}
 
-          {/* ══ ATTENDANCE by sport ══ */}
-          {tab === "attendance" && (
-            <>
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Enrollment & Eligibility</Text>
-                <Text style={styles.sectionSub}>Students per sport · Pool + Squad = Eligible</Text>
-                {data && data.sportStats.length > 0 ? (
-                  data.sportStats.map((s, i) => {
-                    const rate = s.enrolled > 0 ? Math.round((s.eligible / s.enrolled) * 100) : 0;
-                    return (
-                      <View key={s.sport} style={styles.attendCard}>
-                        <View style={styles.attendCardHeader}>
-                          <Text style={styles.attendSportName}>{s.sport}</Text>
-                          <Text style={styles.attendEnrolled}>{s.enrolled} enrolled</Text>
-                        </View>
-                        <View style={styles.attendRow}>
-                          <Text style={styles.attendMonth}>Eligible</Text>
-                          <View style={styles.attendBarBg}>
-                            <View style={[styles.attendBarFill, { width: `${rate}%` as any, backgroundColor: scoreColor(rate) }]} />
-                          </View>
-                          <Text style={[styles.attendPct, { color: scoreColor(rate) }]}>{rate}%</Text>
-                        </View>
-                        <Text style={{ color: "#9CA3AF", fontSize: 11, fontWeight: "600", marginTop: 6 }}>
-                          {s.eligible} eligible (Pool + Squad) / {s.enrolled} enrolled
-                        </Text>
-                      </View>
-                    );
-                  })
-                ) : (
-                  <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                    <Text style={{ color: "#9CA3AF", fontWeight: "600" }}>No sport data available yet.</Text>
-                  </View>
-                )}
-              </View>
-            </>
-          )}
-
-          {/* ══ PERFORMANCE ══ */}
-          {tab === "performance" && (
-            <>
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>Average Scores by Sport</Text>
-                <Text style={[styles.sectionSub, { color: theme.textMuted }]}>Match · Fitness · Discipline (from performance entries)</Text>
-                {data && data.sportStats.length > 0 ? (
-                  data.sportStats.map((s) => (
-                    <View key={s.sport} style={[styles.perfCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
-                      <View style={styles.perfCardHeader}>
-                        <Text style={[styles.perfSportName, { color: theme.text }]}>{s.sport}</Text>
-                        <View style={styles.eligibleBadge}>
-                          <Text style={styles.eligibleText}>{s.eligible} eligible</Text>
-                        </View>
-                      </View>
-                      {[
-                        { label: "Match Performance", value: s.avgMatch,   color: "#C9A227" },
-                        { label: "Fitness Tests",     value: s.avgFitness, color: "#6366F1" },
-                        { label: "Discipline",        value: s.avgDisc,    color: "#10B981" },
-                      ].map((m) => (
-                        <View key={m.label} style={styles.perfMetricRow}>
-                          <Text style={[styles.perfMetricLabel, { color: theme.textSub }]}>{m.label}</Text>
-                          <View style={[styles.perfBarBg, { backgroundColor: theme.bgInput }]}>
-                            <View style={[styles.perfBarFill, { width: `${Math.min(100, m.value)}%` as any, backgroundColor: m.color }]} />
-                          </View>
-                          <Text style={[styles.perfMetricVal, { color: m.color }]}>{m.value > 0 ? m.value : "—"}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ))
-                ) : (
-                  <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                    <Text style={{ color: theme.textSub, fontWeight: "600" }}>No performance data yet. Add marks via the admin tools.</Text>
-                  </View>
-                )}
+          {/* ── Top Performers ── */}
+          {data && data.topStudents.length > 0 && (
+            <View style={{
+              borderRadius: 20, borderWidth: 1,
+              backgroundColor: theme.bgCard, borderColor: theme.border,
+              overflow: "hidden", marginBottom: 14,
+            }}>
+              {/* Header */}
+              <View style={{
+                flexDirection: "row", alignItems: "center", gap: 8,
+                padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border,
+              }}>
+                <Ionicons name="trophy" size={16} color="#D4AF37" />
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: "900" }}>Top Performers</Text>
               </View>
 
-              {/* Eligibility summary table */}
-              {data && data.sportStats.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Eligibility Summary</Text>
-                  <View style={[styles.table, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
-                    <View style={[styles.tableRow, styles.tableHead, { backgroundColor: theme.bgInput }]}>
-                      <Text style={[styles.tableCell, styles.tableHeadText, { flex: 1.5, color: theme.textMuted }]}>Sport</Text>
-                      <Text style={[styles.tableCell, styles.tableHeadText, { textAlign: "right", color: theme.textMuted }]}>Enrolled</Text>
-                      <Text style={[styles.tableCell, styles.tableHeadText, { textAlign: "right", color: theme.textMuted }]}>Eligible</Text>
-                      <Text style={[styles.tableCell, styles.tableHeadText, { textAlign: "right", color: theme.textMuted }]}>Rate</Text>
-                    </View>
-                    {data.sportStats.map((s, i) => {
-                      const rate = s.enrolled > 0 ? Math.round((s.eligible / s.enrolled) * 100) : 0;
-                      return (
-                        <View key={s.sport} style={[styles.tableRow, i < data.sportStats.length - 1 && styles.tableRowBorder, { borderTopColor: theme.border }]}>
-                          <Text style={[styles.tableCell, styles.tableName, { flex: 1.5, color: theme.text }]}>{s.sport}</Text>
-                          <Text style={[styles.tableCell, { textAlign: "right", color: theme.textSub, fontSize: 13 }]}>{s.enrolled}</Text>
-                          <Text style={[styles.tableCell, { textAlign: "right", color: "#10B981", fontWeight: "800", fontSize: 13 }]}>{s.eligible}</Text>
-                          <Text style={[styles.tableCell, { textAlign: "right", color: scoreColor(rate), fontWeight: "900", fontSize: 13 }]}>{rate}%</Text>
-                        </View>
-                      );
-                    })}
+              {data.topStudents.slice(0, 8).map((s, i) => (
+                <View
+                  key={i}
+                  style={{
+                    flexDirection: "row", alignItems: "center", gap: 12,
+                    paddingHorizontal: 16, paddingVertical: 12,
+                    borderBottomWidth: i < Math.min(7, data.topStudents.length - 1) ? 1 : 0,
+                    borderBottomColor: theme.border,
+                  }}
+                >
+                  {/* Rank */}
+                  <Text style={{
+                    width: 22, fontSize: 13, fontWeight: "900",
+                    color: i === 0 ? "#D4AF37" : i === 1 ? "#9CA3AF" : i === 2 ? "#C97C3E" : theme.textMuted,
+                    textAlign: "center",
+                  }}>
+                    {i + 1}
+                  </Text>
+
+                  {/* Avatar */}
+                  <View style={{
+                    width: 36, height: 36, borderRadius: 11,
+                    backgroundColor: "rgba(212,175,55,0.12)",
+                    borderWidth: 1, borderColor: "rgba(212,175,55,0.25)",
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Text style={{ color: "#D4AF37", fontSize: 15, fontWeight: "900" }}>
+                      {s.name?.charAt(0)?.toUpperCase()}
+                    </Text>
                   </View>
+
+                  {/* Name + sport */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontSize: 13, fontWeight: "800" }} numberOfLines={1}>
+                      {s.name}
+                    </Text>
+                    <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 1 }}>
+                      {s.sport}
+                    </Text>
+                  </View>
+
+                  {/* Squad badge */}
+                  <View style={{
+                    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
+                    backgroundColor: levelColor(s.squadLevel) + "18",
+                    borderWidth: 1, borderColor: levelColor(s.squadLevel) + "44",
+                  }}>
+                    <Text style={{ color: levelColor(s.squadLevel), fontSize: 9.5, fontWeight: "900" }}>
+                      {s.squadLevel}
+                    </Text>
+                  </View>
+
+                  {/* Score */}
+                  <Text style={{
+                    fontSize: 15, fontWeight: "900",
+                    color: s.avgScore > 0 ? scoreColor(Number(s.avgScore)) : theme.textMuted,
+                    width: 36, textAlign: "right",
+                  }}>
+                    {s.avgScore > 0 ? String(s.avgScore) : "—"}
+                  </Text>
                 </View>
-              )}
-            </>
+              ))}
+            </View>
           )}
 
-          <View style={{ height: 40 }} />
+          {/* Empty state */}
+          {data && data.sportStats.length === 0 && (
+            <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
+              <Ionicons name="bar-chart-outline" size={52} color={theme.border} />
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "800" }}>No data yet</Text>
+              <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "600", textAlign: "center" }}>
+                Add students, sports and performance entries to see the overview.
+              </Text>
+            </View>
+          )}
         </ScrollView>
       )}
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10, gap: 10 },
-  backBtn: { padding: 2 },
-  headerTitle: { fontSize: 20, fontWeight: "900" },
-  headerSub:   { fontSize: 12, fontWeight: "600", marginTop: 2 },
-  exportBtn: { borderRadius: 10, padding: 8, borderWidth: 1 },
-  tabRow: { flexDirection: "row", paddingHorizontal: 20, gap: 8, marginBottom: 4 },
-  tab: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center", borderWidth: 1 },
-  tabActive: { backgroundColor: "rgba(201,162,39,0.14)", borderColor: "#C9A227" },
-  tabText: { fontSize: 12, fontWeight: "700" },
-  tabTextActive: { color: "#C9A227", fontSize: 12, fontWeight: "800" },
-  scroll: { paddingHorizontal: 20, paddingTop: 16 },
-  kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 4 },
-  kpiCard: { width: "47.5%", borderRadius: 14, padding: 16, borderWidth: 1, gap: 3 },
-  kpiValue: { fontSize: 26, fontWeight: "900" },
-  kpiLabel: { fontSize: 12, fontWeight: "700" },
-  kpiSub:   { fontSize: 10, fontWeight: "600" },
-  section: { marginTop: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: "900", marginBottom: 4 },
-  sectionSub:   { fontSize: 11, fontWeight: "600", marginBottom: 14 },
-  enrollRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
-  enrollSport: { fontSize: 13, fontWeight: "700", width: 80 },
-  enrollBarBg: { flex: 1, height: 8, borderRadius: 4, overflow: "hidden" },
-  enrollBarFill: { height: 8, borderRadius: 4, backgroundColor: "#C9A227" },
-  enrollCount: { fontSize: 13, fontWeight: "800", width: 26, textAlign: "right" },
-  table: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginTop: 10 },
-  tableRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 },
-  tableHead: {},
-  tableRowBorder: { borderTopWidth: 1 },
-  tableCell: { flex: 1, fontSize: 13 },
-  tableHeadText: { fontSize: 11, fontWeight: "700" },
-  tableName: { fontSize: 13, fontWeight: "700" },
-  tableSport: { fontSize: 12, fontWeight: "600" },
-  attendCard: { borderRadius: 14, padding: 16, marginTop: 12, borderWidth: 1 },
-  attendCardHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
-  attendSportName: { fontSize: 14, fontWeight: "800" },
-  attendEnrolled: { fontSize: 12, fontWeight: "600" },
-  attendRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  attendMonth: { fontSize: 12, fontWeight: "700", width: 50 },
-  attendBarBg: { flex: 1, height: 7, borderRadius: 3, overflow: "hidden" },
-  attendBarFill: { height: 7, borderRadius: 3 },
-  attendPct: { fontSize: 12, fontWeight: "800", width: 36, textAlign: "right" },
-  perfCard: { borderRadius: 14, padding: 16, marginTop: 12, borderWidth: 1 },
-  perfCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  perfSportName: { fontSize: 14, fontWeight: "800" },
-  eligibleBadge: { backgroundColor: "rgba(16,185,129,0.1)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  eligibleText: { color: "#10B981", fontSize: 11, fontWeight: "800" },
-  perfMetricRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  perfMetricLabel: { fontSize: 12, fontWeight: "600", width: 110 },
-  perfBarBg: { flex: 1, height: 7, borderRadius: 3, overflow: "hidden" },
-  perfBarFill: { height: 7, borderRadius: 3 },
-  perfMetricVal: { fontSize: 13, fontWeight: "900", width: 28, textAlign: "right" },
-});

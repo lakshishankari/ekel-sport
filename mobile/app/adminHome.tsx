@@ -16,6 +16,7 @@ type Stats = { totalStudents: number; totalSports: number; pendingEnrollments: n
 type FeedPost = {
   id: number; author_id: number; author_name: string; author_role: "ADMIN" | "STUDENT";
   sport_tag: string | null; content: string; likes_count: number;
+  visibility: string;
   created_at: string; liked_by_me: number;
 };
 
@@ -33,9 +34,7 @@ const DRAWER_ITEMS = [
   { title: "Sports",              icon: "football-outline"          as const, route: "/adminSports",               accent: "#10B981" },
   { title: "Squad Pool",          icon: "shield-outline"            as const, route: "/adminSquadPool",             accent: "#6366F1" },
   { title: "Attendance",          icon: "calendar-number-outline"   as const, route: "/adminAttendanceList",        accent: "#F59E0B" },
-  { title: "Match Performance",   icon: "trophy-outline"            as const, route: "/adminMatchPerformance",      accent: "#C9A227" },
-  { title: "Fitness Tests",       icon: "barbell-outline"           as const, route: "/adminFitnessPerformance",    accent: "#10B981" },
-  { title: "Discipline",          icon: "shield-checkmark-outline"  as const, route: "/adminDisciplinePerformance", accent: "#6366F1" },
+  { title: "Player Stats",         icon: "stats-chart-outline"       as const, route: "/adminPlayerStats",              accent: "#D4AF37" },
   { title: "Announcements",       icon: "megaphone-outline"         as const, route: "/adminAnnouncements",         accent: "#F59E0B" },
   { title: "Events",              icon: "calendar-outline"          as const, route: "/adminEvents",                accent: "#3B82F6" },
   { title: "Reports",             icon: "bar-chart-outline"         as const, route: "/adminReports",               accent: "#EF4444" },
@@ -47,27 +46,32 @@ const DRAWER_ITEMS = [
 ════════════════════════════════════════════════════════════════ */
 export default function AdminHome() {
   const { theme, isDark } = useAppTheme();
-  const [userName, setUserName]     = useState("Admin");
-  const [stats, setStats]           = useState<Stats>({ totalStudents: 0, totalSports: 0, pendingEnrollments: 0, inSquadCount: 0 });
-  const [posts, setPosts]           = useState<FeedPost[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const [userName, setUserName]       = useState("Admin");
+  const [stats, setStats]             = useState<Stats>({ totalStudents: 0, totalSports: 0, pendingEnrollments: 0, inSquadCount: 0 });
+  const [posts, setPosts]             = useState<FeedPost[]>([]);
+  const [refreshing, setRefreshing]   = useState(false);
   const [loadingFeed, setLoadingFeed] = useState(true);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen]   = useState(false);
+  const [feedFilter, setFeedFilter]   = useState<"all" | "my-sports">("all");
 
   const drawerX        = useRef(new Animated.Value(-300)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
 
   /* ── Load data ── */
-  const loadData = useCallback(async (isRefresh = false) => {
+  const loadData = useCallback(async (isRefresh = false, filter: "all" | "my-sports" = feedFilter) => {
     try {
       if (!isRefresh) setLoadingFeed(true);
       const { token, role, fullName } = await loadAuth();
       if (!token || role !== "ADMIN") { router.replace("/login"); return; }
       if (fullName) setUserName(fullName);
 
+      const postsUrl = filter === "my-sports"
+        ? "/api/admin/posts?filter=my-sports"
+        : "/api/admin/posts";
+
       const [statsData, postsData] = await Promise.all([
         apiGet<Stats>("/api/admin/stats", token),
-        apiGet<FeedPost[]>("/api/admin/posts", token),
+        apiGet<FeedPost[]>(postsUrl, token),
       ]);
       setStats(statsData);
       setPosts(Array.isArray(postsData) ? postsData : []);
@@ -77,10 +81,17 @@ export default function AdminHome() {
       setLoadingFeed(false);
       setRefreshing(false);
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedFilter]);
 
   useEffect(() => { loadData(); }, [loadData]);
   const onRefresh = () => { setRefreshing(true); loadData(true); };
+
+  const switchFilter = (f: "all" | "my-sports") => {
+    setFeedFilter(f);
+    setLoadingFeed(true);
+    loadData(false, f);
+  };
 
   /* ── Like toggle ── */
   const toggleLike = async (postId: number) => {
@@ -204,6 +215,29 @@ export default function AdminHome() {
             <Text style={{ color: theme.textSub, fontSize: 14 }}>Share an announcement or update...</Text>
           </View>
         </TouchableOpacity>
+
+        {/* Filter toggle bar */}
+        <View style={{ flexDirection: "row", backgroundColor: theme.bgCard, borderBottomWidth: 1, borderBottomColor: theme.border, paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}>
+          {(["all", "my-sports"] as const).map((f) => {
+            const active = feedFilter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => switchFilter(f)}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
+                  backgroundColor: active ? theme.accent + "18" : theme.bgInput,
+                  borderWidth: 1, borderColor: active ? theme.accent : theme.border,
+                }}
+              >
+                <Text style={{ color: active ? theme.accent : theme.textSub, fontSize: 13, fontWeight: active ? "800" : "600" }}>
+                  {f === "all" ? "🌐 All Posts" : "⚽ Tagged Sport"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         {/* Feed */}
         {loadingFeed && !refreshing ? (

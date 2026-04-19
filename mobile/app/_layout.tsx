@@ -71,6 +71,7 @@ export default function RootLayout() {
       <Stack.Screen name="adminAttendanceList" />
       <Stack.Screen name="adminAnnouncements" />
       <Stack.Screen name="adminProfile" />
+      <Stack.Screen name="adminPlayerStats" />
 
       {/* Advisory */}
       <Stack.Screen name="createAdvisory" />

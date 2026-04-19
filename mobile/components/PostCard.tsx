@@ -78,9 +78,10 @@ function ImageGrid({ images }: { images: ReturnType<typeof require>[] }) {
 type Props = {
   post: Post;
   onLike: (id: number) => void;
+  onComment?: (id: number) => void;
 };
 
-export default function PostCard({ post, onLike }: Props) {
+export default function PostCard({ post, onLike, onComment }: Props) {
   const { theme } = useAppTheme();
   const isAdmin = post.authorRole === "ADMIN";
   const initials = post.authorName
@@ -203,31 +204,17 @@ export default function PostCard({ post, onLike }: Props) {
           </Text>
         </TouchableOpacity>
 
+        {/* Divider */}
+        <View style={{ width: 1, height: "60%", alignSelf: "center", backgroundColor: theme.border }} />
+
         {/* Comment */}
         <TouchableOpacity
+          onPress={() => onComment && onComment(post.id)}
           style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 9, gap: 6 }}
           activeOpacity={0.7}
         >
           <Ionicons name="chatbubble-outline" size={20} color={theme.textSub} />
           <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "600" }}>Comment</Text>
-        </TouchableOpacity>
-
-        {/* Repost */}
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 9, gap: 6 }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="repeat-outline" size={20} color={theme.textSub} />
-          <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "600" }}>Repost</Text>
-        </TouchableOpacity>
-
-        {/* Send */}
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 9, gap: 6 }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="paper-plane-outline" size={20} color={theme.textSub} />
-          <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "600" }}>Send</Text>
         </TouchableOpacity>
       </View>
     </View>

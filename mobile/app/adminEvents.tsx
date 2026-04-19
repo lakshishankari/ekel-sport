@@ -17,6 +17,7 @@ type SportEvent = {
   id: number; admin_id: number; title: string; description: string | null;
   sport_tag: string | null; sport_id: number | null; venue: string | null;
   event_date: string | null; event_time: string | null; created_at: string;
+  sub_category: string | null; gender_category: string | null;
 };
 
 type StudentStat = {
@@ -80,6 +81,8 @@ export default function AdminEvents() {
   const [venue, setVenue]           = useState("");
   const [eventDate, setEventDate]   = useState("");
   const [eventTime, setEventTime]   = useState("");
+  const [subCategory, setSubCat]    = useState("");
+  const [genderCategory, setGender] = useState<"" | "Men's" | "Women's" | "Mixed" | "Open">("");
 
 
 
@@ -235,6 +238,8 @@ export default function AdminEvents() {
         venue: venue.trim() || null,
         eventDate: eventDate.trim() || null,
         eventTime: eventTime.trim() || null,
+        subCategory: subCategory.trim() || null,
+        genderCategory: genderCategory || null,
       }, token!);
 
       // Auto-assign pre-selected students to the newly created event team
@@ -253,6 +258,7 @@ export default function AdminEvents() {
         : "Students have been notified.";
       Alert.alert("Event Created ✅", teamMsg);
       setTitle(""); setDesc(""); setVenue(""); setEventDate(""); setEventTime("");
+      setSubCat(""); setGender("");
       setFormSelectedStudentIds(new Set());
       setShowForm(false);
       if (sportId !== null) fetchEvents(sportId, true);
@@ -398,6 +404,43 @@ export default function AdminEvents() {
                 />
               </View>
             </View>
+
+            {/* ── Sub-category (e.g. Under 50kg, Under 60kg) ── */}
+            <Text style={[S.label, { color: theme.textSub }]}>Sub-Category <Text style={{ color: theme.textMuted, fontWeight: "600" }}>(optional)</Text></Text>
+            <TextInput
+              value={subCategory} onChangeText={setSubCat}
+              style={[S.input, { color: theme.text, backgroundColor: theme.bgInput, borderColor: theme.border }]}
+              placeholder="e.g., Under 50kg, Under 60kg, Open"
+              placeholderTextColor={theme.textMuted}
+            />
+
+            {/* ── Gender category chips ── */}
+            <Text style={[S.label, { color: theme.textSub }]}>Gender Category <Text style={{ color: theme.textMuted, fontWeight: "600" }}>(optional)</Text></Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 8, paddingBottom: 2 }}>
+              {(["Men's", "Women's", "Mixed", "Open"] as const).map((g) => {
+                const active = genderCategory === g;
+                const gColors: Record<string, { bg: string; border: string; text: string }> = {
+                  "Men's":   { bg: "rgba(96,165,250,0.15)",  border: "#60A5FA", text: "#60A5FA" },
+                  "Women's": { bg: "rgba(251,113,133,0.15)", border: "#FB7185", text: "#FB7185" },
+                  "Mixed":   { bg: "rgba(167,139,250,0.15)", border: "#A78BFA", text: "#A78BFA" },
+                  "Open":    { bg: "rgba(52,211,153,0.15)",  border: "#34D399", text: "#34D399" },
+                };
+                const gc = gColors[g];
+                return (
+                  <TouchableOpacity
+                    key={g}
+                    onPress={() => setGender(active ? "" : g)}
+                    activeOpacity={0.8}
+                    style={[
+                      S.chip,
+                      { backgroundColor: active ? gc.bg : theme.bgInput, borderColor: active ? gc.border : theme.border },
+                    ]}
+                  >
+                    <Text style={[S.chipText, { color: active ? gc.text : theme.textSub }]}>{g}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
             {/* ── Team pre-selection ── */}
             {students.length > 0 && (
@@ -598,7 +641,24 @@ export default function AdminEvents() {
                             <Text style={[S.sportTagBadgeText, { color: theme.accent }]}>{evt.sport_tag}</Text>
                           </View>
                         )}
+                        {evt.gender_category && (() => {
+                          const gColors: Record<string, { bg: string; border: string; text: string }> = {
+                            "Men's":   { bg: "rgba(96,165,250,0.15)",  border: "#60A5FA44", text: "#60A5FA" },
+                            "Women's": { bg: "rgba(251,113,133,0.15)", border: "#FB718544", text: "#FB7185" },
+                            "Mixed":   { bg: "rgba(167,139,250,0.15)", border: "#A78BFA44", text: "#A78BFA" },
+                            "Open":    { bg: "rgba(52,211,153,0.15)",  border: "#34D39944", text: "#34D399" },
+                          };
+                          const gc = gColors[evt.gender_category] ?? { bg: "rgba(107,114,128,0.15)", border: "#6B728044", text: "#6B7280" };
+                          return (
+                            <View style={[S.sportTagBadge, { backgroundColor: gc.bg, borderColor: gc.border }]}>
+                              <Text style={[S.sportTagBadgeText, { color: gc.text }]}>{evt.gender_category}</Text>
+                            </View>
+                          );
+                        })()}
                       </View>
+                      {evt.sub_category ? (
+                        <Text style={{ fontSize: 11.5, fontWeight: "700", color: theme.textSub }}>📂 {evt.sub_category}</Text>
+                      ) : null}
                       {evt.description ? (
                         <Text style={[S.eventDesc, { color: theme.textSub }]} numberOfLines={isExpanded ? undefined : 2}>{evt.description}</Text>
                       ) : null}

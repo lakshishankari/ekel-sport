@@ -11,7 +11,7 @@ const router = express.Router();
 router.get("/sports", async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT id, name, venue, schedule_text, instructor_name, whatsapp_link FROM sports ORDER BY name ASC"
+      "SELECT id, name, venue, schedule_text, instructor_name, whatsapp_link, eligibility_criteria FROM sports ORDER BY name ASC"
     );
     return res.json(rows);
   } catch (err) {
@@ -19,6 +19,29 @@ router.get("/sports", async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 });
+
+/**
+ * ✅ PUBLIC — Public feed posts (no auth required, for Guest Portal)
+ * Only returns posts with visibility = 'PUBLIC'
+ */
+router.get("/public-posts", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        p.id, p.author_id, p.author_name, p.author_role, p.sport_tag,
+        p.content, p.likes_count, p.visibility, p.created_at
+      FROM posts p
+      WHERE p.visibility = 'PUBLIC'
+      ORDER BY p.created_at DESC
+      LIMIT 30
+    `);
+    return res.json(rows);
+  } catch (err) {
+    console.error("PUBLIC POSTS ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 
 /**
  * ✅ Health check (public)

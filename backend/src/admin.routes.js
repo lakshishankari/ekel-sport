@@ -23,9 +23,14 @@ async function ensureTables() {
       sport_tag   VARCHAR(100),
       content     TEXT NOT NULL,
       likes_count INT UNSIGNED DEFAULT 0,
+      visibility  ENUM('PUBLIC','ALL_USERS','ENROLLED','ONLY_ME') NOT NULL DEFAULT 'ALL_USERS',
       created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Add visibility column if it was created before this migration
+  try {
+    await pool.query(`ALTER TABLE posts ADD COLUMN visibility ENUM('PUBLIC','ALL_USERS','ENROLLED','ONLY_ME') NOT NULL DEFAULT 'ALL_USERS' AFTER likes_count`);
+  } catch (_) { /* column already exists */ }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS post_likes (
       id        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -105,6 +110,33 @@ async function ensureTables() {
       WHERE e.sport_id IS NULL AND e.sport_tag IS NOT NULL
     `);
   } catch (_) { /* column already exists */ }
+  // Add event_id column to performance_entries so marks are scoped per-event
+  try {
+    await pool.query(`ALTER TABLE performance_entries ADD COLUMN event_id INT UNSIGNED NULL AFTER sport_id`);
+  } catch (_) { /* column already exists */ }
+  // Add created_by_admin_id column if missing (older schema may lack it)
+  try {
+    await pool.query(`ALTER TABLE performance_entries ADD COLUMN created_by_admin_id BIGINT UNSIGNED NULL`);
+  } catch (_) { /* column already exists */ }
+  // Add a unique constraint so upsert works cleanly:  one row per student+event+type+metric
+  try {
+    await pool.query(`ALTER TABLE performance_entries ADD UNIQUE KEY uq_event_student_metric (event_id, student_user_id, type, metric)`);
+  } catch (_) { /* constraint already exists */ }
+  // Add placement column to performance_entries (1st / 2nd / 3rd / None)
+  try {
+    await pool.query(`ALTER TABLE performance_entries ADD COLUMN placement VARCHAR(20) NULL AFTER notes`);
+  } catch (_) { /* column already exists */ }
+  // Add sub_category and gender_category to events
+  try {
+    await pool.query(`ALTER TABLE events ADD COLUMN sub_category VARCHAR(100) NULL AFTER description`);
+  } catch (_) { /* column already exists */ }
+  try {
+    await pool.query(`ALTER TABLE events ADD COLUMN gender_category VARCHAR(20) NULL AFTER sub_category`);
+  } catch (_) { /* column already exists */ }
+  // Add eligibility_criteria column to sports
+  try {
+    await pool.query(`ALTER TABLE sports ADD COLUMN eligibility_criteria TEXT NULL AFTER whatsapp_link`);
+  } catch (_) { /* column already exists */ }
 }
 ensureTables().catch((e) => console.warn("ensureTables warning:", e.message));
 
@@ -141,9 +173,29 @@ adminRouter.get("/performance/students", authMiddleware, roleMiddleware(["ADMIN"
   }
 });
 
+// GET existing marks for a specific event
+// GET /api/admin/performance/event/:eventId
+adminRouter.get("/performance/event/:eventId", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const eventId = Number(req.params.eventId);
+    if (!eventId) return res.status(400).json({ message: "Invalid eventId" });
+
+    const [rows] = await pool.query(`
+      SELECT student_user_id, metric, value, notes, placement
+      FROM performance_entries
+      WHERE event_id = ? AND type = 'MATCH'
+    `, [eventId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("PERFORMANCE EVENT GET ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 adminRouter.post("/performance/batch", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const sportId = Number(req.body?.sportId);
+    const eventId = req.body?.eventId ? Number(req.body.eventId) : null;
     const type    = String(req.body?.type || "").toUpperCase();
     const entries = req.body?.entries;
 
@@ -159,13 +211,26 @@ adminRouter.post("/performance/batch", authMiddleware, roleMiddleware(["ADMIN"])
       const notes         = String(entry.notes  || "").trim() || null;
 
       if (!studentUserId) continue;
-      if (value === null) continue; // skip blank entries — value column is NOT NULL
+      if (value === null) continue;
+      if (value < 0 || value > 100) return res.status(400).json({ message: `Score must be between 0 and 100 (got ${value}).` });
+      const placement = entry.placement ? String(entry.placement).trim() : null;
 
-      await pool.query(
-        `INSERT INTO performance_entries (student_user_id, sport_id, type, metric, value, notes, created_by_admin_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [studentUserId, sportId, type, metric, value, notes, req.user.id]
-      );
+      if (eventId) {
+        // Upsert: one record per student+event+type+metric
+        await pool.query(
+          `INSERT INTO performance_entries (student_user_id, sport_id, event_id, type, metric, value, notes, placement, created_by_admin_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE value = VALUES(value), notes = VALUES(notes), placement = VALUES(placement), created_by_admin_id = VALUES(created_by_admin_id)`,
+          [studentUserId, sportId, eventId, type, metric, value, notes, placement, req.user.id]
+        );
+      } else {
+        // No event context — plain insert (fitness / discipline without event)
+        await pool.query(
+          `INSERT INTO performance_entries (student_user_id, sport_id, type, metric, value, notes, placement, created_by_admin_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [studentUserId, sportId, type, metric, value, notes, placement, req.user.id]
+        );
+      }
       saved++;
     }
 
@@ -272,16 +337,28 @@ adminRouter.put("/profile", authMiddleware, roleMiddleware(["ADMIN"]), async (re
 // ─────────────────────────────────────────────────────────────
 adminRouter.get("/posts", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
+    const filterMySports = req.query.filter === "my-sports";
+    // Admins see everything except ONLY_ME posts from other users
+    let where = "WHERE (p.visibility != 'ONLY_ME' OR p.author_id = ?)";
+    const params = [req.user.id, req.user.id];
+
+    if (filterMySports) {
+      // Also filter: get sport names admin is tagged in (sport_tag matches any sport)
+      // For admin, "my sports" means posts tagged with any sport (since admin manages all)
+      // But for consistency we just show all non-ONLY_ME here
+    }
+
     const [rows] = await pool.query(`
       SELECT
         p.id, p.author_id, p.author_name, p.author_role, p.sport_tag,
-        p.content, p.likes_count, p.created_at,
+        p.content, p.likes_count, p.visibility, p.created_at,
         IFNULL(pl.user_id, 0) AS liked_by_me
       FROM posts p
       LEFT JOIN post_likes pl ON pl.post_id = p.id AND pl.user_id = ?
+      ${where}
       ORDER BY p.created_at DESC
       LIMIT 50
-    `, [req.user.id]);
+    `, [req.user.id, req.user.id]);
     return res.json(rows);
   } catch (err) {
     console.error("POSTS GET ERROR:", err);
@@ -291,16 +368,18 @@ adminRouter.get("/posts", authMiddleware, roleMiddleware(["ADMIN"]), async (req,
 
 adminRouter.post("/posts", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
-    const content  = String(req.body?.content || "").trim();
-    const sportTag = String(req.body?.sportTag || "").trim() || null;
+    const content    = String(req.body?.content    || "").trim();
+    const sportTag   = String(req.body?.sportTag   || "").trim() || null;
+    const visibility = ["PUBLIC","ALL_USERS","ENROLLED","ONLY_ME"].includes(req.body?.visibility)
+      ? req.body.visibility : "ALL_USERS";
     if (!content) return res.status(400).json({ message: "content is required" });
 
     const [userRow] = await pool.query("SELECT full_name FROM users WHERE id = ?", [req.user.id]);
     const authorName = userRow[0]?.full_name || "Admin";
 
     const [result] = await pool.query(
-      "INSERT INTO posts (author_id, author_name, author_role, sport_tag, content) VALUES (?, ?, 'ADMIN', ?, ?)",
-      [req.user.id, authorName, sportTag, content]
+      "INSERT INTO posts (author_id, author_name, author_role, sport_tag, content, visibility) VALUES (?, ?, 'ADMIN', ?, ?, ?)",
+      [req.user.id, authorName, sportTag, content, visibility]
     );
     return res.status(201).json({ ok: true, postId: result.insertId });
   } catch (err) {
@@ -418,12 +497,14 @@ adminRouter.get("/events", authMiddleware, roleMiddleware(["ADMIN"]), async (req
 
 adminRouter.post("/events", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
-    const title       = String(req.body?.title       || "").trim();
-    const description = String(req.body?.description || "").trim() || null;
-    const sportTag    = String(req.body?.sportTag    || "").trim() || null;
-    const venue       = String(req.body?.venue       || "").trim() || null;
-    const eventDate   = String(req.body?.eventDate   || "").trim() || null;
-    const eventTime   = String(req.body?.eventTime   || "").trim() || null;
+    const title          = String(req.body?.title          || "").trim();
+    const description    = String(req.body?.description    || "").trim() || null;
+    const sportTag       = String(req.body?.sportTag       || "").trim() || null;
+    const venue          = String(req.body?.venue          || "").trim() || null;
+    const eventDate      = String(req.body?.eventDate      || "").trim() || null;
+    const eventTime      = String(req.body?.eventTime      || "").trim() || null;
+    const subCategory    = String(req.body?.subCategory    || "").trim() || null;
+    const genderCategory = String(req.body?.genderCategory || "").trim() || null;
 
     if (!title) return res.status(400).json({ message: "title is required" });
 
@@ -435,8 +516,8 @@ adminRouter.post("/events", authMiddleware, roleMiddleware(["ADMIN"]), async (re
     }
 
     const [result] = await pool.query(
-      "INSERT INTO events (admin_id, title, description, sport_tag, sport_id, venue, event_date, event_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [req.user.id, title, description, sportTag, sportId, venue, eventDate, eventTime]
+      "INSERT INTO events (admin_id, title, description, sub_category, gender_category, sport_tag, sport_id, venue, event_date, event_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [req.user.id, title, description, subCategory, genderCategory, sportTag, sportId, venue, eventDate, eventTime]
     );
 
     // Notify all students
@@ -489,7 +570,7 @@ adminRouter.get("/users", authMiddleware, roleMiddleware(["ADMIN"]), async (req,
 adminRouter.get("/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, name, venue, schedule_text, instructor_name, instructor_email, whatsapp_link, created_at
+      `SELECT id, name, venue, schedule_text, instructor_name, instructor_email, whatsapp_link, eligibility_criteria, created_at
        FROM sports ORDER BY id DESC`
     );
     return res.json(rows);
@@ -501,12 +582,13 @@ adminRouter.get("/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (req
 
 adminRouter.post("/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
-    const name             = String(req.body?.name             || "").trim();
-    const venue            = String(req.body?.venue            || "").trim();
-    const schedule_text    = String(req.body?.schedule_text    || "").trim();
-    const instructor_name  = String(req.body?.instructor_name  || "").trim();
-    const instructor_email = String(req.body?.instructor_email || "").trim().toLowerCase();
-    const whatsapp_link    = String(req.body?.whatsapp_link    || "").trim();
+    const name                 = String(req.body?.name                 || "").trim();
+    const venue                = String(req.body?.venue                || "").trim();
+    const schedule_text        = String(req.body?.schedule_text        || "").trim();
+    const instructor_name      = String(req.body?.instructor_name      || "").trim();
+    const instructor_email     = String(req.body?.instructor_email     || "").trim().toLowerCase();
+    const whatsapp_link        = String(req.body?.whatsapp_link        || "").trim();
+    const eligibility_criteria = String(req.body?.eligibility_criteria || "").trim();
 
     if (!name) return res.status(400).json({ message: "Sport name is required" });
 
@@ -515,9 +597,9 @@ adminRouter.post("/sports", authMiddleware, roleMiddleware(["ADMIN"]), async (re
     if (existing.length > 0) return res.status(409).json({ message: "Sport already exists" });
 
     const [result] = await pool.query(
-      `INSERT INTO sports (name, venue, schedule_text, instructor_name, instructor_email, whatsapp_link)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [name, venue || null, schedule_text || null, instructor_name || null, instructor_email || null, whatsapp_link || null]
+      `INSERT INTO sports (name, venue, schedule_text, instructor_name, instructor_email, whatsapp_link, eligibility_criteria)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [name, venue || null, schedule_text || null, instructor_name || null, instructor_email || null, whatsapp_link || null, eligibility_criteria || null]
     );
     return res.status(201).json({ message: "Sport created successfully", sportId: result.insertId });
   } catch (err) {
@@ -831,7 +913,7 @@ adminRouter.get("/events/by-sport/:sportId", authMiddleware, roleMiddleware(["AD
     const sportName = sportRows[0]?.name || "";
 
     const [rows] = await pool.query(`
-      SELECT id, title, description, sport_tag, sport_id, venue, event_date, event_time, created_at
+      SELECT id, title, description, sub_category, gender_category, sport_tag, sport_id, venue, event_date, event_time, created_at
       FROM events
       WHERE sport_id = ? OR (sport_id IS NULL AND sport_tag = ?)
       ORDER BY event_date DESC, created_at DESC

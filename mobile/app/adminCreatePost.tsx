@@ -9,12 +9,57 @@ import { loadAuth } from "../lib/authStore";
 import { apiGet, apiPost } from "../lib/api";
 import { useAppTheme } from "../lib/themeStore";
 
+type VisibilityOption = "PUBLIC" | "ALL_USERS" | "ENROLLED" | "ONLY_ME";
+
+const VISIBILITY_OPTIONS: {
+  value: VisibilityOption;
+  label: string;
+  icon: any;
+  desc: string;
+  color: string;
+  bg: string;
+}[] = [
+  {
+    value: "PUBLIC",
+    label: "Public",
+    icon: "earth-outline",
+    desc: "Everyone, including guests",
+    color: "#10B981",
+    bg: "rgba(16,185,129,0.12)",
+  },
+  {
+    value: "ALL_USERS",
+    label: "All Users",
+    icon: "people-outline",
+    desc: "All logged-in students & admins",
+    color: "#3B82F6",
+    bg: "rgba(59,130,246,0.12)",
+  },
+  {
+    value: "ENROLLED",
+    label: "Enrolled",
+    icon: "shield-checkmark-outline",
+    desc: "Only students enrolled in tagged sport",
+    color: "#D4AF37",
+    bg: "rgba(212,175,55,0.12)",
+  },
+  {
+    value: "ONLY_ME",
+    label: "Only Me",
+    icon: "lock-closed-outline",
+    desc: "Private draft — only you can see it",
+    color: "#EF4444",
+    bg: "rgba(239,68,68,0.12)",
+  },
+];
+
 export default function AdminCreatePost() {
   const { theme, isDark } = useAppTheme();
   const [userName, setUserName]           = useState("Admin");
   const [content, setContent]             = useState("");
   const [selectedSport, setSelectedSport] = useState<string | null>(null);
   const [sports, setSports]               = useState<string[]>([]);
+  const [visibility, setVisibility]       = useState<VisibilityOption>("ALL_USERS");
   const [submitting, setSubmitting]       = useState(false);
 
   useEffect(() => {
@@ -38,14 +83,20 @@ export default function AdminCreatePost() {
     setSubmitting(true);
     try {
       const { token } = await loadAuth();
-      await apiPost("/api/admin/posts", { content: content.trim(), sportTag: selectedSport }, token!);
-      Alert.alert("Posted! 🎉", "Your post has been shared to the feed.", [
+      await apiPost("/api/admin/posts", {
+        content: content.trim(),
+        sportTag: selectedSport,
+        visibility,
+      }, token!);
+      Alert.alert("Posted! 🎉", "Your post has been shared.", [
         { text: "OK", onPress: () => router.replace("/adminHome") },
       ]);
     } catch (e: any) {
       Alert.alert("Error", e?.message || "Failed to create post.");
     } finally { setSubmitting(false); }
   };
+
+  const selectedVis = VISIBILITY_OPTIONS.find((v) => v.value === visibility)!;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -57,6 +108,11 @@ export default function AdminCreatePost() {
           <Ionicons name="close" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", flex: 1 }}>Create Post</Text>
+        {/* Visibility badge in header */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: selectedVis.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, marginRight: 10 }}>
+          <Ionicons name={selectedVis.icon} size={13} color={selectedVis.color} />
+          <Text style={{ color: selectedVis.color, fontSize: 12, fontWeight: "800" }}>{selectedVis.label}</Text>
+        </View>
         <TouchableOpacity
           onPress={handlePost}
           disabled={submitting || !content.trim()}
@@ -96,9 +152,45 @@ export default function AdminCreatePost() {
             autoFocus
           />
 
+          {/* ── Visibility Picker ── */}
+          <View style={{ paddingHorizontal: 16, marginTop: 20 }}>
+            <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "800", marginBottom: 10, letterSpacing: 0.5 }}>
+              WHO CAN SEE THIS POST?
+            </Text>
+            <View style={{ gap: 8 }}>
+              {VISIBILITY_OPTIONS.map((opt) => {
+                const active = visibility === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    onPress={() => setVisibility(opt.value)}
+                    activeOpacity={0.8}
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 12,
+                      padding: 13, borderRadius: 14, borderWidth: 1.5,
+                      backgroundColor: active ? opt.bg : theme.bgInput,
+                      borderColor: active ? opt.color : theme.border,
+                    }}
+                  >
+                    <View style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: opt.bg }}>
+                      <Ionicons name={opt.icon} size={18} color={opt.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: active ? opt.color : theme.text, fontSize: 14, fontWeight: "800" }}>{opt.label}</Text>
+                      <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 2 }}>{opt.desc}</Text>
+                    </View>
+                    {active && <Ionicons name="checkmark-circle" size={20} color={opt.color} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           {/* Sport tag selector */}
-          <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
-            <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "700", marginBottom: 10 }}>Tag a Sport (optional)</Text>
+          <View style={{ paddingHorizontal: 16, marginTop: 20 }}>
+            <Text style={{ color: theme.textSub, fontSize: 13, fontWeight: "800", marginBottom: 10, letterSpacing: 0.5 }}>
+              TAG A SPORT <Text style={{ color: theme.textMuted, fontWeight: "600" }}>(optional)</Text>
+            </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: "row" }}>
               {sports.map((sport) => {
                 const isSelected = selectedSport === sport;
@@ -114,6 +206,14 @@ export default function AdminCreatePost() {
                 );
               })}
             </ScrollView>
+            {visibility === "ENROLLED" && !selectedSport && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, backgroundColor: "rgba(212,175,55,0.1)", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)" }}>
+                <Ionicons name="information-circle-outline" size={15} color="#D4AF37" />
+                <Text style={{ color: "#D4AF37", fontSize: 12, fontWeight: "700", flex: 1 }}>
+                  Tag a sport to limit visibility to its enrolled students.
+                </Text>
+              </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

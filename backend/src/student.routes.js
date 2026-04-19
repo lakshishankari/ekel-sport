@@ -73,16 +73,61 @@ router.put("/profile", authMiddleware, roleMiddleware(["STUDENT"]), async (req, 
 // ─────────────────────────────────────────────────────────────
 router.get("/posts", authMiddleware, roleMiddleware(["STUDENT"]), async (req, res) => {
   try {
+    const filterMySports = req.query.filter === "my-sports";
+    const userId = req.user.id;
+
+    // Get all sport names the student is enrolled in (APPROVED)
+    const [enrolledRows] = await pool.query(`
+      SELECT s.name AS sport_name, s.id AS sport_id
+      FROM sport_enrollments se
+      JOIN sports s ON s.id = se.sport_id
+      WHERE se.student_user_id = ? AND se.status = 'APPROVED'
+    `, [userId]);
+    const enrolledSportNames = enrolledRows.map((r) => r.sport_name);
+
+    // Build visibility filter:
+    //   PUBLIC      → always show
+    //   ALL_USERS   → always show
+    //   ENROLLED    → show only if post sport_tag is a sport the student enrolled in, or sport_tag is null
+    //   ONLY_ME     → show only to the author
+    // Plus optional my-sports filter
+    let sportFilter = "";
+    const params = [userId];
+
+    let visibilityWhere;
+    if (enrolledSportNames.length > 0) {
+      const placeholders = enrolledSportNames.map(() => "?").join(",");
+      visibilityWhere = `(
+        p.visibility IN ('PUBLIC','ALL_USERS')
+        OR (p.visibility = 'ENROLLED' AND (p.sport_tag IN (${placeholders}) OR p.sport_tag IS NULL))
+        OR (p.visibility = 'ONLY_ME'  AND p.author_id = ?)
+      )`;
+      params.push(...enrolledSportNames, userId);
+    } else {
+      visibilityWhere = `(
+        p.visibility IN ('PUBLIC','ALL_USERS')
+        OR (p.visibility = 'ONLY_ME' AND p.author_id = ?)
+      )`;
+      params.push(userId);
+    }
+
+    if (filterMySports && enrolledSportNames.length > 0) {
+      const placeholders = enrolledSportNames.map(() => "?").join(",");
+      sportFilter = `AND (p.sport_tag IN (${placeholders}) OR p.sport_tag IS NULL)`;
+      params.push(...enrolledSportNames);
+    }
+
     const [rows] = await pool.query(`
       SELECT
         p.id, p.author_id, p.author_name, p.author_role, p.sport_tag,
-        p.content, p.likes_count, p.created_at,
+        p.content, p.likes_count, p.visibility, p.created_at,
         IFNULL(pl.user_id, 0) AS liked_by_me
       FROM posts p
       LEFT JOIN post_likes pl ON pl.post_id = p.id AND pl.user_id = ?
+      WHERE ${visibilityWhere} ${sportFilter}
       ORDER BY p.created_at DESC
       LIMIT 50
-    `, [req.user.id]);
+    `, [userId, ...params]);
     return res.json(rows);
   } catch (err) {
     console.error("STUDENT POSTS GET ERROR:", err);
@@ -92,16 +137,18 @@ router.get("/posts", authMiddleware, roleMiddleware(["STUDENT"]), async (req, re
 
 router.post("/posts", authMiddleware, roleMiddleware(["STUDENT"]), async (req, res) => {
   try {
-    const content  = String(req.body?.content  || "").trim();
-    const sportTag = String(req.body?.sportTag || "").trim() || null;
+    const content    = String(req.body?.content    || "").trim();
+    const sportTag   = String(req.body?.sportTag   || "").trim() || null;
+    const visibility = ["PUBLIC","ALL_USERS","ENROLLED","ONLY_ME"].includes(req.body?.visibility)
+      ? req.body.visibility : "ALL_USERS";
     if (!content) return res.status(400).json({ message: "content is required" });
 
     const [userRow] = await pool.query("SELECT full_name FROM users WHERE id = ?", [req.user.id]);
     const authorName = userRow[0]?.full_name || "Student";
 
     const [result] = await pool.query(
-      "INSERT INTO posts (author_id, author_name, author_role, sport_tag, content) VALUES (?, ?, 'STUDENT', ?, ?)",
-      [req.user.id, authorName, sportTag, content]
+      "INSERT INTO posts (author_id, author_name, author_role, sport_tag, content, visibility) VALUES (?, ?, 'STUDENT', ?, ?, ?)",
+      [req.user.id, authorName, sportTag, content, visibility]
     );
     return res.status(201).json({ ok: true, postId: result.insertId });
   } catch (err) {

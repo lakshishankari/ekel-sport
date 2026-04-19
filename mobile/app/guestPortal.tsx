@@ -32,12 +32,29 @@ const SPORT_META: Record<string, { icon: any; color: string }> = {
 
 const COLORS = ["#6366F1","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899","#14B8A6","#F97316","#0EA5E9","#84CC16"];
 
-const GENERAL_ELIGIBILITY = [
-  "Open to all nationalities",
-  "Must be enrolled or applying to the university",
-  "Medical fitness certificate required",
-  "Age 17 – 35 years",
-  "Prior experience preferred but not required",
+const AVATAR_POOL = ["#4F46E5","#10B981","#C9A227","#EF4444","#8B5CF6","#3B82F6","#F59E0B"];
+function hashAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_POOL[Math.abs(hash) % AVATAR_POOL.length];
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60)    return "just now";
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+  return `${Math.floor(diff / 2592000)}mo ago`;
+}
+
+const GENERAL_REQUIREMENTS = [
+  "✅  Open to students of ALL nationalities",
+  "✅  International students are welcome",
+  "✅  Admission letter or enrollment confirmation needed",
+  "✅  Valid passport / national ID",
+  "✅  Medical fitness certificate",
+  "✅  No sports scholarship bonds required",
 ];
 
 type LiveSport = {
@@ -45,6 +62,7 @@ type LiveSport = {
   name: string;
   venue: string | null;
   schedule_text: string | null;
+  eligibility_criteria: string | null;
   icon: any;
   color: string;
 };
@@ -62,6 +80,7 @@ export default function GuestPortal() {
   const [activeTab, setActiveTab] = useState<Tab>("Feed");
   const [expandedSport, setExpandedSport] = useState<number | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
   const [sportPrograms, setSportPrograms] = useState<LiveSport[]>([]);
   const [loadingSports, setLoadingSports] = useState(true);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -77,6 +96,7 @@ export default function GuestPortal() {
             name: s.name,
             venue: s.venue,
             schedule_text: s.schedule_text,
+            eligibility_criteria: s.eligibility_criteria ?? null,
             icon: SPORT_META[s.name]?.icon ?? "football-outline",
             color: SPORT_META[s.name]?.color ?? COLORS[i % COLORS.length],
           }));
@@ -85,6 +105,31 @@ export default function GuestPortal() {
       })
       .catch(() => {})
       .finally(() => setLoadingSports(false));
+
+    // Load public posts
+    fetch(`${API_BASE_URL}/api/public-posts`)
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        if (Array.isArray(data)) {
+          const mapped: Post[] = data.map((p) => ({
+            id: p.id,
+            authorId: String(p.author_id),
+            authorName: p.author_name,
+            authorRole: p.author_role,
+            sport: p.sport_tag ?? undefined,
+            content: p.content,
+            hashtags: [],
+            timeAgo: formatTimeAgo(p.created_at),
+            likes: p.likes_count,
+            comments: 0,
+            liked: false,
+            avatarColor: hashAvatarColor(p.author_name),
+          }));
+          setPosts(mapped);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPosts(false));
   }, []);
 
   const switchTab = (tab: Tab) => {
@@ -375,38 +420,57 @@ export default function GuestPortal() {
               </View>
 
               {/* Per-sport eligibility */}
-              {sportPrograms.map((sport) => (
-                <View key={sport.id} style={{
-                  backgroundColor: theme.bgCard, borderRadius: 16,
-                  borderWidth: 1, borderColor: theme.border,
-                  marginBottom: 12, overflow: "hidden",
-                }}>
-                  <TouchableOpacity
-                    onPress={() => setExpandedSport(expandedSport === sport.id ? null : sport.id)}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: sport.color + "22", alignItems: "center", justifyContent: "center" }}>
-                      <Ionicons name={sport.icon} size={22} color={sport.color} />
-                    </View>
-                    <Text style={{ color: theme.text, fontSize: 16, fontWeight: "900", flex: 1 }}>{sport.name}</Text>
-                    <Ionicons name={expandedSport === sport.id ? "chevron-up" : "chevron-down"} size={18} color={theme.textSub} />
-                  </TouchableOpacity>
+              {sportPrograms.map((sport) => {
+                const criteria = sport.eligibility_criteria
+                  ? sport.eligibility_criteria.split("\n").map((s) => s.trim()).filter(Boolean)
+                  : [];
 
-                  {expandedSport === sport.id && (
-                    <View style={{ borderTopWidth: 1, borderTopColor: theme.border, padding: 16 }}>
-                      {GENERAL_ELIGIBILITY.map((req, i) => (
-                        <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-                          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: sport.color + "22", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
-                            <Ionicons name="checkmark" size={13} color={sport.color} />
-                          </View>
-                          <Text style={{ color: theme.text, fontSize: 13, lineHeight: 20, flex: 1 }}>{req}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              ))}
+                return (
+                  <View key={sport.id} style={{
+                    backgroundColor: theme.bgCard, borderRadius: 16,
+                    borderWidth: 1, borderColor: theme.border,
+                    marginBottom: 12, overflow: "hidden",
+                  }}>
+                    <TouchableOpacity
+                      onPress={() => setExpandedSport(expandedSport === sport.id ? null : sport.id)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: sport.color + "22", alignItems: "center", justifyContent: "center" }}>
+                        <Ionicons name={sport.icon} size={22} color={sport.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: theme.text, fontSize: 16, fontWeight: "900" }}>{sport.name}</Text>
+                        {criteria.length > 0 && (
+                          <Text style={{ color: theme.textSub, fontSize: 12, marginTop: 2 }}>
+                            {criteria.length} requirement{criteria.length !== 1 ? "s" : ""}
+                          </Text>
+                        )}
+                      </View>
+                      <Ionicons name={expandedSport === sport.id ? "chevron-up" : "chevron-down"} size={18} color={theme.textSub} />
+                    </TouchableOpacity>
+
+                    {expandedSport === sport.id && (
+                      <View style={{ borderTopWidth: 1, borderTopColor: theme.border, padding: 16 }}>
+                        {criteria.length > 0 ? (
+                          criteria.map((req, i) => (
+                            <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: sport.color + "22", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                                <Ionicons name="checkmark" size={13} color={sport.color} />
+                              </View>
+                              <Text style={{ color: theme.text, fontSize: 13, lineHeight: 20, flex: 1 }}>{req}</Text>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: "italic" }}>
+                            No specific criteria set — general requirements apply.
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
 
               {/* CTA */}
               <View style={{

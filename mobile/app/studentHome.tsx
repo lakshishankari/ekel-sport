@@ -15,6 +15,7 @@ import PostCard from "../components/PostCard";
 type FeedPost = {
   id: number; author_id: number; author_name: string; author_role: "ADMIN" | "STUDENT";
   sport_tag: string | null; content: string; likes_count: number;
+  visibility: string;
   created_at: string; liked_by_me: number;
 };
 
@@ -38,14 +39,15 @@ function hashColor(name: string) {
 
 export default function StudentHome() {
   const { theme, isDark } = useAppTheme();
-  const [fullName, setFullName]     = useState("Student");
+  const [fullName, setFullName]       = useState("Student");
   const [avatarColor, setAvatarColor] = useState("#4F46E5");
-  const [unread, setUnread]         = useState(0);
-  const [posts, setPosts]           = useState<FeedPost[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const [unread, setUnread]           = useState(0);
+  const [posts, setPosts]             = useState<FeedPost[]>([]);
+  const [refreshing, setRefreshing]   = useState(false);
   const [loadingFeed, setLoadingFeed] = useState(true);
+  const [feedFilter, setFeedFilter]   = useState<"all" | "my-sports">("all");
 
-  const loadData = useCallback(async (isRefresh = false) => {
+  const loadData = useCallback(async (isRefresh = false, filter: "all" | "my-sports" = feedFilter) => {
     try {
       if (!isRefresh) setLoadingFeed(true);
       const auth = await loadAuth();
@@ -53,18 +55,29 @@ export default function StudentHome() {
       if (auth.fullName) setFullName(auth.fullName);
       setAvatarColor(hashColor(auth.fullName || "Student"));
 
+      const postsUrl = filter === "my-sports"
+        ? "/api/student/posts?filter=my-sports"
+        : "/api/student/posts";
+
       const [postsData, unreadData] = await Promise.all([
-        apiGet<FeedPost[]>("/api/student/posts", auth.token),
+        apiGet<FeedPost[]>(postsUrl, auth.token),
         apiGet<{ unread: number }>("/api/student/notifications/unread-count", auth.token),
       ]);
       setPosts(Array.isArray(postsData) ? postsData : []);
       setUnread(unreadData?.unread || 0);
     } catch { /* silent */ }
     finally { setLoadingFeed(false); setRefreshing(false); }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedFilter]);
 
   useEffect(() => { loadData(); }, [loadData]);
   const onRefresh = () => { setRefreshing(true); loadData(true); };
+
+  const switchFilter = (f: "all" | "my-sports") => {
+    setFeedFilter(f);
+    setLoadingFeed(true);
+    loadData(false, f);
+  };
 
   const toggleLike = async (postId: number) => {
     try {
@@ -140,6 +153,29 @@ export default function StudentHome() {
             <Text style={{ color: theme.textSub, fontSize: 14 }}>Share something with your team...</Text>
           </View>
         </TouchableOpacity>
+
+        {/* Filter toggle bar */}
+        <View style={{ flexDirection: "row", backgroundColor: theme.bgCard, borderBottomWidth: 1, borderBottomColor: theme.border, paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}>
+          {(["all", "my-sports"] as const).map((f) => {
+            const active = feedFilter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => switchFilter(f)}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
+                  backgroundColor: active ? theme.accent + "18" : theme.bgInput,
+                  borderWidth: 1, borderColor: active ? theme.accent : theme.border,
+                }}
+              >
+                <Text style={{ color: active ? theme.accent : theme.textSub, fontSize: 13, fontWeight: active ? "800" : "600" }}>
+                  {f === "all" ? "🌐 All Posts" : "⚽ My Sports"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         {loadingFeed && !refreshing ? (
           <View style={{ alignItems: "center", paddingVertical: 40 }}>

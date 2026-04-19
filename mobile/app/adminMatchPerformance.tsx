@@ -37,6 +37,7 @@ type EntryRow = {
   metric: string;
   value: string;
   notes: string;
+  placement: string; // "1st" | "2nd" | "3rd" | "" (not placed)
 };
 
 // ─── Level config ─────────────────────────────────────────────────────────────
@@ -130,14 +131,37 @@ export default function AdminMatchPerformance() {
       setRows([]);
       const data = await apiGet<EventMember[]>(`/api/admin/event-team/${eid}`);
       setTeamMembers(data);
-      setRows(data.map((m) => ({
+
+      // Build blank rows first, then overlay any existing saved marks
+      const blankRows: EntryRow[] = data.map((m) => ({
         student_user_id: m.student_user_id,
         full_name: m.full_name,
         student_id: m.student_id,
         metric: "Score",
         value: "",
         notes: "",
-      })));
+        placement: "",
+      }));
+
+      // Fetch existing marks for this event so the admin can see/edit them
+      try {
+        const existing = await apiGet<{ student_user_id: number; metric: string; value: number; notes: string | null; placement: string | null }[]>(
+          `/api/admin/performance/event/${eid}`
+        );
+        if (existing.length > 0) {
+          existing.forEach((e) => {
+            const idx = blankRows.findIndex((r) => r.student_user_id === e.student_user_id);
+            if (idx !== -1) {
+              blankRows[idx].value     = String(e.value ?? "");
+              blankRows[idx].metric    = e.metric    || "Score";
+              blankRows[idx].notes     = e.notes     || "";
+              blankRows[idx].placement = e.placement || "";
+            }
+          });
+        }
+      } catch { /* ignore — no existing marks yet */ }
+
+      setRows(blankRows);
     } catch {
       setTeamMembers([]);
       setRows([]);
@@ -160,20 +184,32 @@ export default function AdminMatchPerformance() {
       Alert.alert("Error", "Please enter at least one score value.");
       return;
     }
+    // Validate 0–100 range
+    const outOfRange = validRows.find((r) => {
+      const n = Number(r.value);
+      return isNaN(n) || n < 0 || n > 100;
+    });
+    if (outOfRange) {
+      Alert.alert("Invalid Score", `"${outOfRange.value}" is out of range. All scores must be between 0 and 100.`);
+      return;
+    }
     setSaving(true);
     try {
       await apiPost("/api/admin/performance/batch", {
         sportId,
+        eventId,          // ← pass eventId so marks are scoped to this event
         type: "MATCH",
         entries: validRows.map((r) => ({
           studentUserId: r.student_user_id,
           metric: r.metric || "Score",
           value: r.value,
           notes: r.notes,
+          placement: r.placement || null,
         })),
       });
       Alert.alert("✅ Saved!", `Match entries saved for ${validRows.length} player(s).`);
-      setRows((prev) => prev.map((r) => ({ ...r, value: "", notes: "" })));
+      // Re-fetch so the saved values repopulate immediately
+      await fetchTeamMembers(eventId);
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to save entries");
     } finally {
@@ -393,6 +429,37 @@ export default function AdminMatchPerformance() {
                       </View>
                     </View>
 
+                    {/* Placement selector */}
+                    <Text style={[styles.smallLabel, { marginTop: 10, color: theme.textSub }]}>Placement</Text>
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                      {([
+                        { label: "🥇 1st",  value: "1st",   bg: "rgba(212,175,55,0.18)",  border: "#D4AF37", text: "#D4AF37" },
+                        { label: "🥈 2nd",  value: "2nd",   bg: "rgba(156,163,175,0.18)", border: "#9CA3AF", text: "#9CA3AF" },
+                        { label: "🥉 3rd",  value: "3rd",   bg: "rgba(180,120,60,0.18)",  border: "#B4783C", text: "#B4783C" },
+                        { label: "Not Placed", value: "",      bg: "rgba(107,114,128,0.1)",  border: "#6B7280", text: "#6B7280" },
+                      ]).map((pl) => {
+                        const active = r.placement === pl.value;
+                        return (
+                          <TouchableOpacity
+                            key={pl.label}
+                            onPress={() => updateRow(r.student_user_id, { placement: active ? "" : pl.value })}
+                            activeOpacity={0.8}
+                            style={[
+                              styles.placementChip,
+                              {
+                                backgroundColor: active ? pl.bg : theme.bgCard,
+                                borderColor: active ? pl.border : theme.border,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.placementChipText, { color: active ? pl.text : theme.textMuted }]}>
+                              {pl.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
                     {/* Notes */}
                     <Text style={[styles.smallLabel, { marginTop: 10, color: theme.textSub }]}>Notes</Text>
                     <TextInput
@@ -525,6 +592,13 @@ const styles = StyleSheet.create({
     marginTop: 6, height: 40, borderRadius: 12, paddingHorizontal: 12,
     fontWeight: "700", borderWidth: 1,
   },
+
+  // Placement chips
+  placementChip: {
+    flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1,
+    alignItems: "center", justifyContent: "center",
+  },
+  placementChipText: { fontSize: 11, fontWeight: "800" },
 
   saveBtn: {
     marginHorizontal: 14, marginTop: 12, height: 52, borderRadius: 16,

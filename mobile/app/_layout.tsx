@@ -53,7 +53,7 @@ export default function RootLayout() {
       <Stack.Screen name="studentProfile" />
       <Stack.Screen name="studentAttendance" />
       <Stack.Screen name="studentPerformance" />
-      <Stack.Screen name="studentScanAttendance" />
+
 
       {/* Admin */}
       <Stack.Screen name="adminUsers" />
@@ -67,7 +67,7 @@ export default function RootLayout() {
       <Stack.Screen name="adminDisciplinePerformance" />
       <Stack.Screen name="adminReports" />
       <Stack.Screen name="adminCreateSession" />
-      <Stack.Screen name="adminDisplayQR" />
+      <Stack.Screen name="adminMarkAttendance" />
       <Stack.Screen name="adminAttendanceList" />
       <Stack.Screen name="adminAnnouncements" />
       <Stack.Screen name="adminProfile" />

@@ -20,9 +20,11 @@ export default function AdminCreateSession() {
   const [loadingSports, setLoadingSports] = useState(true);
   const [selectedSportId, setSelectedSportId] = useState<number | null>(null);
 
+  const [sessionName, setSessionName] = useState("");
   const [location, setLocation] = useState("");
-  const [date, setDate]         = useState(() => new Date().toISOString().split("T")[0]); // default today
-  const [time, setTime]         = useState("");
+  const [date, setDate]         = useState(() => new Date().toISOString().split("T")[0]);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime]     = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // ── Load sports on mount
@@ -55,21 +57,24 @@ export default function AdminCreateSession() {
           sportId:     selectedSportId,
           location:    location.trim(),
           sessionDate: date.trim(),
+          sessionName: sessionName.trim() || undefined,
+          startTime:   startTime.trim() || undefined,
+          endTime:     endTime.trim()   || undefined,
         },
         token!
       );
 
       const selectedSport = sports.find((s) => s.id === selectedSportId);
 
-      // Navigate to QR screen with the real session data
-      router.push({
-        pathname: "/adminDisplayQR",
+      // Navigate to manual mark attendance screen
+      router.replace({
+        pathname: "/adminMarkAttendance" as any,
         params: {
           sessionId:   String(resp.sessionId),
           sport:       selectedSport?.name ?? "",
           location:    location.trim(),
           sessionDate: date.trim(),
-          sessionTime: time.trim(),
+          sessionName: sessionName.trim(),
         },
       });
     } catch (e: any) {
@@ -104,7 +109,20 @@ export default function AdminCreateSession() {
             Session Details
           </Text>
 
-          <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "800" }}>SPORT *</Text>
+          <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "800" }}>SESSION NAME (optional)</Text>
+          <TextInput
+            value={sessionName}
+            onChangeText={setSessionName}
+            style={inputStyle as any}
+            placeholder="e.g., Morning Practice, Week 3"
+            placeholderTextColor={theme.textMuted}
+          />
+
+          {/* Location */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 }}>
+            <Ionicons name="location-outline" size={14} color={theme.textMuted} />
+            <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "800" }}>LOCATION *</Text>
+          </View>
           {loadingSports ? (
             <ActivityIndicator color={theme.accent} style={{ marginTop: 10 }} />
           ) : (
@@ -170,11 +188,24 @@ export default function AdminCreateSession() {
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 }}>
                 <Ionicons name="time-outline" size={14} color={theme.textMuted} />
-                <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "800" }}>TIME (opt)</Text>
+                <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "800" }}>START (opt)</Text>
               </View>
               <TextInput
-                value={time}
-                onChangeText={setTime}
+                value={startTime}
+                onChangeText={setStartTime}
+                style={inputStyle as any}
+                placeholder="HH:MM"
+                placeholderTextColor={theme.textMuted}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 }}>
+                <Ionicons name="time-outline" size={14} color={theme.textMuted} />
+                <Text style={{ color: theme.textSub, fontSize: 12, fontWeight: "800" }}>END (opt)</Text>
+              </View>
+              <TextInput
+                value={endTime}
+                onChangeText={setEndTime}
                 style={inputStyle as any}
                 placeholder="HH:MM"
                 placeholderTextColor={theme.textMuted}
@@ -197,9 +228,9 @@ export default function AdminCreateSession() {
               <ActivityIndicator color="#111827" />
             ) : (
               <>
-                <Ionicons name="qr-code-outline" size={20} color="#111827" />
+                <Ionicons name="people-outline" size={20} color="#111827" />
                 <Text style={{ color: "#111827", fontSize: 16, fontWeight: "900" }}>
-                  Create & Show QR Code
+                  Create & Mark Attendance
                 </Text>
               </>
             )}
@@ -215,8 +246,8 @@ export default function AdminCreateSession() {
         }}>
           <Ionicons name="information-circle-outline" size={18} color={theme.accent} />
           <Text style={{ flex: 1, color: theme.textSub, fontSize: 12, fontWeight: "600", lineHeight: 18 }}>
-            One QR code is generated per session. Students scan it from their app to instantly mark their attendance.
-            Each student can only scan once per session.
+            After creating the session, you will be taken to the attendance marking
+            screen where you can mark each enrolled student as Present or Absent.
           </Text>
         </View>
       </ScrollView>

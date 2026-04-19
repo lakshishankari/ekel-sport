@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 
-const DEV_MACHINE_IP = "172.20.10.3"; // ✅ Actual machine IP from ipconfig (hotspot)
+const DEV_MACHINE_IP = "172.20.10.10"; // ✅ Actual machine IP from ipconfig (hotspot)
 const DEV_PORT = 5000;
 
 export const API_BASE_URL =

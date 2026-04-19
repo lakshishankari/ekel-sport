@@ -416,63 +416,37 @@ router.get("/performance", authMiddleware, roleMiddleware(["STUDENT"]), async (r
   }
 });
 
+
 // ─────────────────────────────────────────────────────────────
-// MARK ATTENDANCE via QR scan
-// POST /api/student/attendance/mark  { sessionId }
+// SESSION-WISE ATTENDANCE HISTORY (student view)
+// GET /api/student/attendance/sessions
+// Returns each session the student was part of with their status
 // ─────────────────────────────────────────────────────────────
-router.post("/attendance/mark", authMiddleware, roleMiddleware(["STUDENT"]), async (req, res) => {
+router.get("/attendance/sessions", authMiddleware, roleMiddleware(["STUDENT"]), async (req, res) => {
   try {
-    const sessionId     = Number(req.body?.sessionId);
-    const studentUserId = req.user.id;
-
-    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
-
-    // 1. Get session info
-    const [sessRows] = await pool.query(
-      "SELECT id, sport_id, session_date, location FROM attendance_sessions WHERE id = ?",
-      [sessionId]
-    );
-    if (sessRows.length === 0)
-      return res.status(404).json({ message: "Session not found. QR may be expired or invalid." });
-
-    const session = sessRows[0];
-
-    // 2. Check student is APPROVED for this sport
-    const [enrollRows] = await pool.query(
-      "SELECT id FROM sport_enrollments WHERE sport_id = ? AND student_user_id = ? AND status = 'APPROVED' LIMIT 1",
-      [session.sport_id, studentUserId]
-    );
-    if (enrollRows.length === 0)
-      return res.status(403).json({ message: "You are not enrolled in this sport. Cannot mark attendance." });
-
-    // 3. Prevent duplicate marking for this session
-    const [existingAtt] = await pool.query(
-      "SELECT id FROM attendance WHERE student_user_id = ? AND session_id = ? LIMIT 1",
-      [studentUserId, sessionId]
-    );
-    if (existingAtt.length > 0)
-      return res.status(409).json({ message: "Attendance already recorded for this session." });
-
-    // 4. Insert attendance record
-    await pool.query(
-      "INSERT INTO attendance (student_user_id, sport_id, session_id, session_date) VALUES (?, ?, ?, ?)",
-      [studentUserId, session.sport_id, sessionId, session.session_date]
-    );
-
-    // 5. Fetch sport name for confirmation
-    const [sportRows] = await pool.query("SELECT name FROM sports WHERE id = ?", [session.sport_id]);
-    const sportName = sportRows[0]?.name || "Sport";
-
-    return res.json({
-      ok: true,
-      message: `Attendance marked for ${sportName}`,
-      sport:   sportName,
-      date:    session.session_date,
-      location: session.location,
-    });
+    const [rows] = await pool.query(`
+      SELECT
+        ats.id            AS session_id,
+        ats.session_date,
+        ats.location,
+        ats.session_name,
+        s.name            AS sport_name,
+        s.id              AS sport_id,
+        IFNULL(a.status, 'NOT_MARKED') AS status,
+        a.attended_at
+      FROM attendance_sessions ats
+      JOIN sports s ON s.id = ats.sport_id
+      JOIN sport_enrollments se
+        ON se.sport_id = ats.sport_id AND se.student_user_id = ? AND se.status = 'APPROVED'
+      LEFT JOIN attendance a
+        ON a.session_id = ats.id AND a.student_user_id = ?
+      ORDER BY ats.session_date DESC, ats.created_at DESC
+      LIMIT 60
+    `, [req.user.id, req.user.id]);
+    return res.json(rows);
   } catch (err) {
-    console.error("MARK ATTENDANCE ERROR:", err);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("GET /student/attendance/sessions error:", err);
+    return res.status(500).json({ message: "Failed to load session history" });
   }
 });
 

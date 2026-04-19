@@ -133,6 +133,46 @@ async function ensureTables() {
   try {
     await pool.query(`ALTER TABLE events ADD COLUMN gender_category VARCHAR(20) NULL AFTER sub_category`);
   } catch (_) { /* column already exists */ }
+  // Manual attendance: ensure attendance_sessions table exists
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS attendance_sessions (
+      id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      sport_id     INT UNSIGNED NOT NULL,
+      location     VARCHAR(255) NOT NULL,
+      session_date DATE NOT NULL,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  // Add columns that may be missing from old QR-era schema
+  try { await pool.query(`ALTER TABLE attendance_sessions ADD COLUMN session_name VARCHAR(255) NULL AFTER session_date`);  } catch (_) {}
+  try { await pool.query(`ALTER TABLE attendance_sessions ADD COLUMN start_time   VARCHAR(10) NULL AFTER session_name`);   } catch (_) {}
+  try { await pool.query(`ALTER TABLE attendance_sessions ADD COLUMN end_time     VARCHAR(10) NULL AFTER start_time`);     } catch (_) {}
+  try { await pool.query(`ALTER TABLE attendance_sessions ADD COLUMN created_by   BIGINT UNSIGNED NULL AFTER end_time`);   } catch (_) {}
+  // Ensure attendance table exists with status support
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS attendance (
+      id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      student_user_id  BIGINT UNSIGNED NOT NULL,
+      sport_id         INT UNSIGNED NOT NULL,
+      session_id       INT UNSIGNED NOT NULL,
+      session_date     DATE,
+      status           ENUM('PRESENT','ABSENT') NOT NULL DEFAULT 'PRESENT',
+      marked_by        BIGINT UNSIGNED NULL,
+      attended_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  // Add status column to attendance if missing (old schema had no status)
+  try {
+    await pool.query(`ALTER TABLE attendance ADD COLUMN status ENUM('PRESENT','ABSENT') NOT NULL DEFAULT 'PRESENT' AFTER session_date`);
+  } catch (_) { /* already exists */ }
+  // Add marked_by column
+  try {
+    await pool.query(`ALTER TABLE attendance ADD COLUMN marked_by BIGINT UNSIGNED NULL AFTER status`);
+  } catch (_) { /* already exists */ }
+  // Add unique constraint to prevent duplicate attendance per student per session
+  try {
+    await pool.query(`ALTER TABLE attendance ADD UNIQUE KEY uq_session_student (session_id, student_user_id)`);
+  } catch (_) { /* already exists */ }
   // Add eligibility_criteria column to sports
   try {
     await pool.query(`ALTER TABLE sports ADD COLUMN eligibility_criteria TEXT NULL AFTER whatsapp_link`);
@@ -1043,14 +1083,17 @@ adminRouter.get("/attendance/sessions", authMiddleware, roleMiddleware(["ADMIN"]
         s.name       AS sport,
         s.id         AS sport_id,
         ats.session_date,
+        ats.session_name,
         ats.location,
+        SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) AS present_count,
+        SUM(CASE WHEN a.status = 'ABSENT'  THEN 1 ELSE 0 END) AS absent_count,
         COUNT(a.id)  AS attendees,
         (SELECT COUNT(*) FROM sport_enrollments se
          WHERE se.sport_id = ats.sport_id AND se.status = 'APPROVED') AS total_enrolled
       FROM attendance_sessions ats
       JOIN sports s ON s.id = ats.sport_id
       LEFT JOIN attendance a ON a.session_id = ats.id
-      GROUP BY ats.id, s.name, s.id, ats.session_date, ats.location
+      GROUP BY ats.id, s.name, s.id, ats.session_date, ats.session_name, ats.location
       ORDER BY ats.session_date DESC, ats.created_at DESC
       LIMIT 100
     `);
@@ -1061,7 +1104,44 @@ adminRouter.get("/attendance/sessions", authMiddleware, roleMiddleware(["ADMIN"]
   }
 });
 
-// GET attendees for a specific session
+// GET all enrolled students for a session's sport, with their current attendance status
+// GET /api/admin/attendance/sessions/:id/enrolled
+adminRouter.get("/attendance/sessions/:id/enrolled", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sessionId = Number(req.params.id);
+    if (!sessionId) return res.status(400).json({ message: "Invalid sessionId" });
+
+    // Get session's sport_id
+    const [sessRows] = await pool.query(
+      "SELECT sport_id FROM attendance_sessions WHERE id = ? LIMIT 1",
+      [sessionId]
+    );
+    if (sessRows.length === 0) return res.status(404).json({ message: "Session not found" });
+    const { sport_id } = sessRows[0];
+
+    // All approved enrolled students + their status for this specific session
+    const [rows] = await pool.query(`
+      SELECT
+        u.id          AS student_user_id,
+        u.full_name,
+        u.student_id,
+        se.squad_level,
+        IFNULL(a.status, 'NOT_MARKED') AS status,
+        a.attended_at
+      FROM sport_enrollments se
+      JOIN users u ON u.id = se.student_user_id
+      LEFT JOIN attendance a ON a.student_user_id = se.student_user_id AND a.session_id = ?
+      WHERE se.sport_id = ? AND se.status = 'APPROVED'
+      ORDER BY u.full_name ASC
+    `, [sessionId, sport_id]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("SESSION ENROLLED ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET attendees (only those who have a record) for a specific session
 adminRouter.get("/attendance/sessions/:id/attendees", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const sessionId = Number(req.params.id);
@@ -1073,13 +1153,14 @@ adminRouter.get("/attendance/sessions/:id/attendees", authMiddleware, roleMiddle
         u.full_name,
         u.student_id,
         se.squad_level,
+        a.status,
         a.attended_at
       FROM attendance a
       JOIN users u ON u.id = a.student_user_id
       LEFT JOIN attendance_sessions ats ON ats.id = a.session_id
       LEFT JOIN sport_enrollments se ON se.student_user_id = u.id AND se.sport_id = ats.sport_id
       WHERE a.session_id = ?
-      ORDER BY u.full_name ASC
+      ORDER BY a.status ASC, u.full_name ASC
     `, [sessionId]);
     return res.json(rows);
   } catch (err) {
@@ -1088,23 +1169,148 @@ adminRouter.get("/attendance/sessions/:id/attendees", authMiddleware, roleMiddle
   }
 });
 
+// POST bulk mark attendance for a session
+// Body: { entries: [{ studentUserId, status: 'PRESENT'|'ABSENT' }] }
+adminRouter.post("/attendance/sessions/:id/mark", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sessionId = Number(req.params.id);
+    const entries   = req.body?.entries;
+    const adminId   = req.user.id;
+
+    if (!sessionId) return res.status(400).json({ message: "Invalid sessionId" });
+    if (!Array.isArray(entries) || entries.length === 0)
+      return res.status(400).json({ message: "entries array is required" });
+
+    // Verify session exists and get sport_id
+    const [sessRows] = await pool.query(
+      "SELECT sport_id, session_date FROM attendance_sessions WHERE id = ? LIMIT 1",
+      [sessionId]
+    );
+    if (sessRows.length === 0) return res.status(404).json({ message: "Session not found" });
+    const { sport_id, session_date } = sessRows[0];
+
+    let saved = 0;
+    for (const entry of entries) {
+      const studentUserId = Number(entry.studentUserId);
+      const status = ["PRESENT", "ABSENT"].includes(entry.status) ? entry.status : null;
+      if (!studentUserId || !status) continue;
+
+      // Upsert: insert or update on duplicate (session_id, student_user_id)
+      await pool.query(`
+        INSERT INTO attendance (student_user_id, sport_id, session_id, session_date, status, marked_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by)
+      `, [studentUserId, sport_id, sessionId, session_date, status, adminId]);
+      saved++;
+    }
+
+    return res.json({ ok: true, saved });
+  } catch (err) {
+    console.error("BULK MARK ATTENDANCE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // POST create a new session
 adminRouter.post("/attendance/sessions", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const sportId    = Number(req.body?.sportId);
-    const location   = String(req.body?.location || "").trim();
+    const location   = String(req.body?.location   || "").trim();
     const sessionDate= String(req.body?.sessionDate || "").trim();
+    const sessionName= String(req.body?.sessionName || "").trim() || null;
+    const startTime  = String(req.body?.startTime   || "").trim() || null;
+    const endTime    = String(req.body?.endTime     || "").trim() || null;
 
     if (!sportId || !location || !sessionDate)
       return res.status(400).json({ message: "sportId, location and sessionDate are required" });
 
-    const [result] = await pool.query(
-      "INSERT INTO attendance_sessions (sport_id, location, session_date) VALUES (?, ?, ?)",
-      [sportId, location, sessionDate]
-    );
+    let result;
+    try {
+      // Try full insert with new columns (start_time, end_time, created_by)
+      [result] = await pool.query(
+        "INSERT INTO attendance_sessions (sport_id, location, session_date, session_name, start_time, end_time, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [sportId, location, sessionDate, sessionName, startTime, endTime, req.user.id]
+      );
+    } catch (innerErr) {
+      // Fallback: columns may not exist yet in older DB — use base insert
+      console.warn("Session insert fell back to base schema:", innerErr.message);
+      [result] = await pool.query(
+        "INSERT INTO attendance_sessions (sport_id, location, session_date, session_name) VALUES (?, ?, ?, ?)",
+        [sportId, location, sessionDate, sessionName]
+      );
+    }
     return res.status(201).json({ ok: true, sessionId: result.insertId });
   } catch (err) {
     console.error("CREATE SESSION ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET single session detail
+adminRouter.get("/attendance/sessions/:id", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sessionId = Number(req.params.id);
+    if (!sessionId) return res.status(400).json({ message: "Invalid sessionId" });
+    const [rows] = await pool.query(`
+      SELECT
+        ats.id, ats.session_date, ats.session_name, ats.location, ats.start_time, ats.end_time, ats.created_at,
+        s.id AS sport_id, s.name AS sport,
+        SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) AS present_count,
+        SUM(CASE WHEN a.status = 'ABSENT'  THEN 1 ELSE 0 END) AS absent_count,
+        COUNT(a.id) AS marked_count,
+        (SELECT COUNT(*) FROM sport_enrollments se
+         WHERE se.sport_id = ats.sport_id AND se.status = 'APPROVED') AS total_enrolled
+      FROM attendance_sessions ats
+      JOIN sports s ON s.id = ats.sport_id
+      LEFT JOIN attendance a ON a.session_id = ats.id
+      WHERE ats.id = ?
+      GROUP BY ats.id, s.id, s.name
+    `, [sessionId]);
+    if (rows.length === 0) return res.status(404).json({ message: "Session not found" });
+    return res.json(rows[0]);
+  } catch (err) {
+    console.error("SESSION DETAIL ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// DELETE a session (and cascade-remove attendance records)
+adminRouter.delete("/attendance/sessions/:id", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sessionId = Number(req.params.id);
+    if (!sessionId) return res.status(400).json({ message: "Invalid sessionId" });
+    // Remove linked attendance rows first to avoid FK constraint issues
+    await pool.query("DELETE FROM attendance WHERE session_id = ?", [sessionId]);
+    const [result] = await pool.query("DELETE FROM attendance_sessions WHERE id = ?", [sessionId]);
+    if (result.affectedRows === 0) return res.status(404).json({ message: "Session not found" });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("DELETE SESSION ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET attendance records filtered by user (admin view of a student's history)
+// GET /api/admin/attendance/user/:userId
+adminRouter.get("/attendance/user/:userId", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!userId) return res.status(400).json({ message: "Invalid userId" });
+    const [rows] = await pool.query(`
+      SELECT
+        a.id, a.status, a.attended_at,
+        ats.id AS session_id, ats.session_date, ats.session_name, ats.location,
+        ats.start_time, ats.end_time,
+        s.name AS sport, s.id AS sport_id
+      FROM attendance a
+      JOIN attendance_sessions ats ON ats.id = a.session_id
+      JOIN sports s ON s.id = ats.sport_id
+      WHERE a.student_user_id = ?
+      ORDER BY ats.session_date DESC, ats.created_at DESC
+    `, [userId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("ATTENDANCE BY USER ERROR:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });

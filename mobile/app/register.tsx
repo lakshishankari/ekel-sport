@@ -25,14 +25,48 @@ export default function RegisterScreen() {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const emailHint = useMemo(() => "Student ID format: IM/2022/048 (DEPT/YEAR/SERIAL)", []);
+  // ── Valid Department Codes (University of Kelaniya) ───────────────────────
+  const VALID_DEPT_CODES = [
+    "IM","CS","IT","SE","DS",   // Faculty of Computing
+    "SC","BIO","CHE","PHY","PS", // Faculty of Science & Technology
+    "CE","EE","ME","CH",         // Faculty of Engineering
+    "MG","ACC","ECO","MKT",      // Faculty of Management
+    "SL","SOC","HIS","EDU",      // Faculty of Humanities
+    "MED","LAW",                  // Medicine & Law
+  ];
 
-  function isValidStudentId(value: string) {
-    return /^[A-Z]{2,4}\/\d{4}\/\d{3}$/.test(value.trim());
+  // Student ID: DEPT/YEAR/NNN
+  const ID_REGEX = /^([A-Z]{2,4})\/([0-9]{4})\/([0-9]{3})$/;
+  // Student email: name-dept<YY><NNN>@stu.kln.ac.lk
+  const EMAIL_REGEX = /^[a-z0-9._-]+-([a-z]{2,4})(\d{2})(\d{3})@stu\.kln\.ac\.lk$/;
+
+  function validateStudentId(value: string): string | null {
+    const m = ID_REGEX.exec(value.trim().toUpperCase());
+    if (!m) return "Use format DEPT/YEAR/NNN  •  Example: IM/2022/048";
+    if (!VALID_DEPT_CODES.includes(m[1])) return `Unknown dept code "${m[1]}". Valid: ${VALID_DEPT_CODES.join(", ")}`;
+    const yr = parseInt(m[2], 10);
+    if (yr < 2000 || yr > new Date().getFullYear() + 1) return `Year ${m[2]} is out of range`;
+    return null;
   }
 
-  function isValidStudentEmail(value: string) {
-    return /^[a-z0-9._-]+-[a-z]{2,}\d+@stu\.kln\.ac\.lk$/.test(value.trim().toLowerCase());
+  function validateStudentEmail(value: string): string | null {
+    const m = EMAIL_REGEX.exec(value.trim().toLowerCase());
+    if (!m) return "Use format: desilva-im22048@stu.kln.ac.lk";
+    if (!VALID_DEPT_CODES.includes(m[1].toUpperCase())) return `Unknown dept code "${m[1].toUpperCase()}" in email`;
+    return null;
+  }
+
+  function validateConsistency(sid: string, em: string): string | null {
+    const idM = ID_REGEX.exec(sid.trim().toUpperCase());
+    const emM = EMAIL_REGEX.exec(em.trim().toLowerCase());
+    if (!idM || !emM) return null; // format errors already caught above
+    const dept      = idM[1].toLowerCase();
+    const yearShort = idM[2].slice(2); // "2022" → "22"
+    const serial    = idM[3];
+    if (dept !== emM[1])      return `Dept mismatch: ID has "${idM[1]}" but email has "${emM[1].toUpperCase()}"\nEmail suffix should start with "${dept}${yearShort}${serial}"`;
+    if (yearShort !== emM[2]) return `Year mismatch: ID year ${idM[2]} → suffix "${yearShort}" but email has "${emM[2]}"\nEmail suffix should be "${dept}${yearShort}${serial}"`;
+    if (serial !== emM[3])    return `Serial mismatch: ID has "${serial}" but email has "${emM[3]}"\nEmail suffix should be "${dept}${yearShort}${serial}"`;
+    return null;
   }
 
   async function onRegister() {
@@ -43,10 +77,21 @@ export default function RegisterScreen() {
     const cpw = confirmPassword;
 
     if (!sid || !name || !em || !pw || !cpw) { Alert.alert("Missing fields", "Please fill all fields."); return; }
-    if (!isValidStudentId(sid)) { Alert.alert("Invalid Student ID", "Use format: DEPT/YEAR/SERIAL\nExamples:\n• IM/2022/048\n• PY/2023/123"); return; }
-    if (!isValidStudentEmail(em)) { Alert.alert("Invalid student email", "Use your university student email like: shankar-im2022048@stu.kln.ac.lk"); return; }
+
+    // Validate student ID
+    const idErr = validateStudentId(sid);
+    if (idErr) { Alert.alert("Invalid Student ID", idErr); return; }
+
+    // Validate email
+    const emErr = validateStudentEmail(em);
+    if (emErr) { Alert.alert("Invalid email", emErr); return; }
+
+    // Cross-check ID and email refer to same student
+    const crossErr = validateConsistency(sid, em);
+    if (crossErr) { Alert.alert("ID & Email mismatch", crossErr); return; }
+
     if (pw.length < 8) { Alert.alert("Weak password", "Password must be at least 8 characters."); return; }
-    if (pw !== cpw) { Alert.alert("Password mismatch", "Password and Confirm Password do not match."); return; }
+    if (pw !== cpw)    { Alert.alert("Password mismatch", "Password and Confirm Password do not match."); return; }
 
     try {
       setLoading(true);
@@ -100,8 +145,10 @@ export default function RegisterScreen() {
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.bg} />
 
       <Text style={{ fontSize: 28, fontWeight: "800", color: theme.text, marginBottom: 6 }}>Create account</Text>
-      <Text style={{ color: theme.textSub, marginBottom: 10 }}>Student self-registration</Text>
-      <Text style={{ color: theme.textSub, marginBottom: 14, fontSize: 12 }}>{emailHint}</Text>
+      <Text style={{ color: theme.textSub, marginBottom: 4 }}>Student self-registration</Text>
+      <Text style={{ color: theme.textMuted, marginBottom: 14, fontSize: 11.5, lineHeight: 17 }}>
+        {'Student ID:  IM/2022/048  (DEPT/YEAR/NNN)\nEmail:  desilva-im22048@stu.kln.ac.lk'}
+      </Text>
 
       <Text style={{ color: theme.text, marginBottom: 6, marginTop: 10 }}>Student ID</Text>
       <TextInput style={inputStyle} placeholder="IM/2022/048" placeholderTextColor={theme.textMuted} value={studentId} onChangeText={setStudentId} autoCapitalize="characters" />

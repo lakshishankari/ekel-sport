@@ -42,8 +42,9 @@ async function ensureTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS announcements (
       id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-      admin_id   BIGINT UNSIGNED NOT NULL,
-      admin_name VARCHAR(255) NOT NULL,
+      admin_id   BIGINT UNSIGNED NULL,
+      admin_name VARCHAR(255) NULL,
+      sport_id   INT UNSIGNED NULL,
       title      VARCHAR(255) NOT NULL,
       message    TEXT NOT NULL,
       sport_tag  VARCHAR(100),
@@ -428,7 +429,7 @@ adminRouter.post("/posts", authMiddleware, roleMiddleware(["ADMIN"]), async (req
   }
 });
 
-adminRouter.post("/posts/:id/like", authMiddleware, async (req, res) => {
+adminRouter.post("/posts/:id/like", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const postId = Number(req.params.id);
     const userId = req.user.id;
@@ -886,7 +887,13 @@ adminRouter.get("/reports/summary", authMiddleware, roleMiddleware(["ADMIN"]), a
         ROUND(AVG(CASE WHEN pe.type = 'MATCH'      THEN pe.value END), 1) AS avg_match,
         ROUND(AVG(CASE WHEN pe.type = 'FITNESS'    THEN pe.value END), 1) AS avg_fitness,
         ROUND(AVG(CASE WHEN pe.type = 'DISCIPLINE' THEN pe.value END), 1) AS avg_discipline,
-        SUM(CASE WHEN se.squad_level IN ('POOL','SQUAD') THEN 1 ELSE 0 END) AS eligible
+        (
+          SELECT COUNT(DISTINCT se2.student_user_id)
+          FROM sport_enrollments se2
+          WHERE se2.sport_id = s.id
+            AND se2.status = 'APPROVED'
+            AND se2.squad_level IN ('POOL','SQUAD')
+        ) AS eligible
       FROM sports s
       LEFT JOIN sport_enrollments se ON se.sport_id = s.id AND se.status = 'APPROVED'
       LEFT JOIN performance_entries pe ON pe.student_user_id = se.student_user_id AND pe.sport_id = s.id

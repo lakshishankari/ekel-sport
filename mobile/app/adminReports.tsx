@@ -139,9 +139,11 @@ export default function AdminReports() {
                         height: "100%", borderRadius: 4, backgroundColor: "#D4AF37",
                       }} />
                     </View>
-                    <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 4 }}>
-                      {s.eligible} eligible (Pool + Squad)
-                    </Text>
+                    {s.eligible > 0 && (
+                      <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: "600", marginTop: 4 }}>
+                        {s.eligible} in Pool / Squad
+                      </Text>
+                    )}
                   </View>
                 );
               })}

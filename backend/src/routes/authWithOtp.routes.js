@@ -7,11 +7,7 @@ const crypto = require("crypto");
 
 const router = express.Router();
 
-// Helper functions
-function isStudentEmail(email) {
-    const studentEmailRegex = /^[a-zA-Z0-9._-]+-[a-z]{2,}\d+@stu\.kln\.ac\.lk$/;
-    return studentEmailRegex.test(String(email || "").trim().toLowerCase());
-}
+const { validateStudentId, validateStudentEmail, validateConsistency } = require("../validators/studentValidator");
 
 function hashOtp(otp) {
     return crypto.createHash("sha256").update(String(otp)).digest("hex");
@@ -52,13 +48,24 @@ router.post("/send-registration-otp", async (req, res) => {
             });
         }
 
-        if (!isStudentEmail(email)) {
-            return res.status(400).json({
-                message: "Student email must be like shankar-im22048@stu.kln.ac.lk",
-            });
+        // ── Validate Student ID format + dept code ───────────────────────────
+        const studentIdError = validateStudentId(studentId);
+        if (studentIdError) {
+            return res.status(400).json({ message: studentIdError });
         }
 
+        // ── Validate student email format + dept code ────────────────────────
         const cleanEmail = email.trim().toLowerCase();
+        const emailError = validateStudentEmail(cleanEmail);
+        if (emailError) {
+            return res.status(400).json({ message: emailError });
+        }
+
+        // ── Cross-validate: ID and email must refer to the same student ───────
+        const consistencyError = validateConsistency(studentId, cleanEmail);
+        if (consistencyError) {
+            return res.status(400).json({ message: consistencyError });
+        }
 
         // Check if email already exists
         const [existingEmail] = await pool.query("SELECT id FROM users WHERE email = ?", [cleanEmail]);

@@ -119,7 +119,7 @@ router.post("/reset-password", async (req, res) => {
     const resetToken = String(req.body.reset_token || "");
     const newPassword = String(req.body.new_password || "");
 
-    if (!email || !resetToken || newPassword.length < 6) {
+    if (!email || !resetToken || newPassword.length < 8) {
       return res.status(400).json({ message: "Invalid request" });
     }
 

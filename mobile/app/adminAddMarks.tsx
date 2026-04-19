@@ -26,18 +26,18 @@ export default function AdminAddMarks() {
 
   return (
     <Screen>
-      <AppHeader title="Performance Module" subtitle="Match, fitness and discipline entries. Attendance is auto from QR." showBack backRoute="/adminHome" />
+      <AppHeader title="Performance Module" subtitle="Match, fitness and discipline entries per student." showBack backRoute="/adminHome" />
 
-      {/* Auto attendance info card */}
+      {/* Attendance info card */}
       <AppCard style={{ marginBottom: 14 }}>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center", padding: 4 }}>
           <View style={{ width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: theme.bgInput, borderWidth: 1, borderColor: theme.border }}>
-            <Ionicons name="qr-code-outline" size={20} color={theme.textSub} />
+            <Ionicons name="calendar-outline" size={20} color={theme.textSub} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.text, fontSize: 14, fontWeight: "900" }}>Attendance (Auto)</Text>
+            <Text style={{ color: theme.text, fontSize: 14, fontWeight: "900" }}>Attendance (Manual)</Text>
             <Text style={{ marginTop: 2, color: theme.textSub, fontSize: 12.5, lineHeight: 17, fontWeight: "600" }}>
-              Marked via QR per training session. Attendance score is calculated automatically.
+              Marked per session by admin. Manage sessions from the Attendance section.
             </Text>
           </View>
         </View>

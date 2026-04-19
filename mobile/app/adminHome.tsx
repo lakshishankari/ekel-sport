@@ -41,7 +41,6 @@ const DRAWER_ITEMS = [
   { title: "Events",              icon: "calendar-outline"          as const, route: "/adminEvents",                accent: "#3B82F6" },
   { title: "Reports",             icon: "bar-chart-outline"         as const, route: "/adminReports",               accent: "#EF4444" },
   { title: "Create Advisory",     icon: "person-add-outline"        as const, route: "/createAdvisory",             accent: "#8B5CF6" },
-  { title: "My Profile",          icon: "person-circle-outline"     as const, route: "/adminProfile",               accent: "#C9A227" },
 ];
 
 /* ════════════════════════════════════════════════════════════════

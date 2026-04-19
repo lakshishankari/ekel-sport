@@ -159,9 +159,10 @@ adminRouter.post("/performance/batch", authMiddleware, roleMiddleware(["ADMIN"])
       const notes         = String(entry.notes  || "").trim() || null;
 
       if (!studentUserId) continue;
+      if (value === null) continue; // skip blank entries — value column is NOT NULL
 
       await pool.query(
-        `INSERT INTO performance_entries (student_user_id, sport_id, type, metric, value, notes, recorded_by)
+        `INSERT INTO performance_entries (student_user_id, sport_id, type, metric, value, notes, created_by_admin_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [studentUserId, sportId, type, metric, value, notes, req.user.id]
       );
@@ -174,6 +175,7 @@ adminRouter.post("/performance/batch", authMiddleware, roleMiddleware(["ADMIN"])
     return res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 adminRouter.get("/performance/history", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
   try {
@@ -943,4 +945,87 @@ adminRouter.get("/squad-pool/:sportId/squad-members", authMiddleware, roleMiddle
   }
 });
 
+// ─────────────────────────────────────────────────────────────
+// ATTENDANCE SESSIONS
+// GET  /api/admin/attendance/sessions          — list all sessions
+// GET  /api/admin/attendance/sessions/:id/attendees — attendees for session
+// POST /api/admin/attendance/sessions          — create a session
+// ─────────────────────────────────────────────────────────────
+
+// GET all sessions with attendee counts
+adminRouter.get("/attendance/sessions", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        ats.id,
+        s.name       AS sport,
+        s.id         AS sport_id,
+        ats.session_date,
+        ats.location,
+        COUNT(a.id)  AS attendees,
+        (SELECT COUNT(*) FROM sport_enrollments se
+         WHERE se.sport_id = ats.sport_id AND se.status = 'APPROVED') AS total_enrolled
+      FROM attendance_sessions ats
+      JOIN sports s ON s.id = ats.sport_id
+      LEFT JOIN attendance a ON a.session_id = ats.id
+      GROUP BY ats.id, s.name, s.id, ats.session_date, ats.location
+      ORDER BY ats.session_date DESC, ats.created_at DESC
+      LIMIT 100
+    `);
+    return res.json(rows);
+  } catch (err) {
+    console.error("ATTENDANCE SESSIONS LIST ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET attendees for a specific session
+adminRouter.get("/attendance/sessions/:id/attendees", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sessionId = Number(req.params.id);
+    if (!sessionId) return res.status(400).json({ message: "Invalid sessionId" });
+
+    const [rows] = await pool.query(`
+      SELECT
+        u.id AS student_user_id,
+        u.full_name,
+        u.student_id,
+        se.squad_level,
+        a.attended_at
+      FROM attendance a
+      JOIN users u ON u.id = a.student_user_id
+      LEFT JOIN attendance_sessions ats ON ats.id = a.session_id
+      LEFT JOIN sport_enrollments se ON se.student_user_id = u.id AND se.sport_id = ats.sport_id
+      WHERE a.session_id = ?
+      ORDER BY u.full_name ASC
+    `, [sessionId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("SESSION ATTENDEES ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// POST create a new session
+adminRouter.post("/attendance/sessions", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const sportId    = Number(req.body?.sportId);
+    const location   = String(req.body?.location || "").trim();
+    const sessionDate= String(req.body?.sessionDate || "").trim();
+
+    if (!sportId || !location || !sessionDate)
+      return res.status(400).json({ message: "sportId, location and sessionDate are required" });
+
+    const [result] = await pool.query(
+      "INSERT INTO attendance_sessions (sport_id, location, session_date) VALUES (?, ?, ?)",
+      [sportId, location, sessionDate]
+    );
+    return res.status(201).json({ ok: true, sessionId: result.insertId });
+  } catch (err) {
+    console.error("CREATE SESSION ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 module.exports = { adminRouter };
+

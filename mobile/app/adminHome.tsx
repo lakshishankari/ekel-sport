@@ -32,8 +32,7 @@ const BOTTOM_TABS = [
 const DRAWER_ITEMS = [
   { title: "Sports",              icon: "football-outline"          as const, route: "/adminSports",               accent: "#10B981" },
   { title: "Squad Pool",          icon: "shield-outline"            as const, route: "/adminSquadPool",             accent: "#6366F1" },
-  { title: "Attendance Session",  icon: "scan-outline"              as const, route: "/adminCreateSession",         accent: "#C9A227" },
-  { title: "Attendance List",     icon: "list-outline"              as const, route: "/adminAttendanceList",        accent: "#F59E0B" },
+  { title: "Attendance",          icon: "calendar-number-outline"   as const, route: "/adminAttendanceList",        accent: "#F59E0B" },
   { title: "Match Performance",   icon: "trophy-outline"            as const, route: "/adminMatchPerformance",      accent: "#C9A227" },
   { title: "Fitness Tests",       icon: "barbell-outline"           as const, route: "/adminFitnessPerformance",    accent: "#10B981" },
   { title: "Discipline",          icon: "shield-checkmark-outline"  as const, route: "/adminDisciplinePerformance", accent: "#6366F1" },

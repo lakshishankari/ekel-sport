@@ -81,9 +81,7 @@ export default function AdminEvents() {
   const [eventDate, setEventDate]   = useState("");
   const [eventTime, setEventTime]   = useState("");
 
-  // ── All sport names (for the create form picker)
-  const [allSportNames, setAllSportNames] = useState<string[]>([]);
-  const [formSportTag, setFormSportTag]   = useState("");
+
 
   // ── Students pre-selected in the create form
   const [formSelectedStudentIds, setFormSelectedStudentIds] = useState<Set<number>>(new Set());
@@ -99,7 +97,6 @@ export default function AdminEvents() {
       // Load ALL sports (not just those with enrollments)
       const allSports = await apiGet<Sport[]>("/api/admin/sports");
       setSports(allSports);
-      setAllSportNames(allSports.map((s) => s.name));
       if (allSports.length > 0) {
         setSportId(allSports[0].id);
       }
@@ -225,12 +222,12 @@ export default function AdminEvents() {
   // ── Create event
   const handleCreate = async () => {
     if (!title.trim()) { Alert.alert("Error", "Event title is required"); return; }
-    if (!sportId && !formSportTag) { Alert.alert("Error", "Please select a sport for this event"); return; }
+    if (!sportId) { Alert.alert("Error", "Please select a sport from the top first"); return; }
     setSubmitting(true);
     try {
       const { token } = await loadAuth();
-      // Determine sportTag from selection
-      const resolvedSportTag = formSportTag || sports.find((s) => s.id === sportId)?.name || null;
+      // Always use the sport currently selected via the top chips
+      const resolvedSportTag = sports.find((s) => s.id === sportId)?.name || null;
       const resp = await apiPost<{ ok: boolean; eventId: number }>("/api/admin/events", {
         title: title.trim(),
         description: description.trim() || null,
@@ -255,7 +252,7 @@ export default function AdminEvents() {
         ? `Event created with ${formSelectedStudentIds.size} player${formSelectedStudentIds.size !== 1 ? "s" : ""} in the team. Students notified.`
         : "Students have been notified.";
       Alert.alert("Event Created ✅", teamMsg);
-      setTitle(""); setDesc(""); setFormSportTag(""); setVenue(""); setEventDate(""); setEventTime("");
+      setTitle(""); setDesc(""); setVenue(""); setEventDate(""); setEventTime("");
       setFormSelectedStudentIds(new Set());
       setShowForm(false);
       if (sportId !== null) fetchEvents(sportId, true);
@@ -362,22 +359,16 @@ export default function AdminEvents() {
               multiline
             />
 
-            <Text style={[S.label, { color: theme.textSub }]}>Sport</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: "row", marginTop: 8 }}>
-              {["", ...allSportNames].map((s) => {
-                const label = s === "" ? "General" : s;
-                const isSel = formSportTag === s;
-                return (
-                  <Pressable
-                    key={label}
-                    onPress={() => setFormSportTag(s)}
-                    style={[S.sportPill, isSel && S.sportPillActive]}
-                  >
-                    <Text style={[S.sportPillText, isSel && S.sportPillTextActive]}>{label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            {/* Selected sport shown as read-only badge (driven by the top chip) */}
+            {selectedSport && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 }}>
+                <Text style={[S.label, { color: theme.textSub, marginTop: 0 }]}>Sport</Text>
+                <View style={[S.sportPill, S.sportPillActive]}>
+                  <Text style={[S.sportPillText, S.sportPillTextActive]}>{selectedSport.name}</Text>
+                </View>
+                <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: "600" as const }}>(change via top chips)</Text>
+              </View>
+            )}
 
             <Text style={[S.label, { color: theme.textSub }]}>Venue</Text>
             <TextInput

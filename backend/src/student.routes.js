@@ -369,4 +369,65 @@ router.get("/performance", authMiddleware, roleMiddleware(["STUDENT"]), async (r
   }
 });
 
+// ─────────────────────────────────────────────────────────────
+// MARK ATTENDANCE via QR scan
+// POST /api/student/attendance/mark  { sessionId }
+// ─────────────────────────────────────────────────────────────
+router.post("/attendance/mark", authMiddleware, roleMiddleware(["STUDENT"]), async (req, res) => {
+  try {
+    const sessionId     = Number(req.body?.sessionId);
+    const studentUserId = req.user.id;
+
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+
+    // 1. Get session info
+    const [sessRows] = await pool.query(
+      "SELECT id, sport_id, session_date, location FROM attendance_sessions WHERE id = ?",
+      [sessionId]
+    );
+    if (sessRows.length === 0)
+      return res.status(404).json({ message: "Session not found. QR may be expired or invalid." });
+
+    const session = sessRows[0];
+
+    // 2. Check student is APPROVED for this sport
+    const [enrollRows] = await pool.query(
+      "SELECT id FROM sport_enrollments WHERE sport_id = ? AND student_user_id = ? AND status = 'APPROVED' LIMIT 1",
+      [session.sport_id, studentUserId]
+    );
+    if (enrollRows.length === 0)
+      return res.status(403).json({ message: "You are not enrolled in this sport. Cannot mark attendance." });
+
+    // 3. Prevent duplicate marking for this session
+    const [existingAtt] = await pool.query(
+      "SELECT id FROM attendance WHERE student_user_id = ? AND session_id = ? LIMIT 1",
+      [studentUserId, sessionId]
+    );
+    if (existingAtt.length > 0)
+      return res.status(409).json({ message: "Attendance already recorded for this session." });
+
+    // 4. Insert attendance record
+    await pool.query(
+      "INSERT INTO attendance (student_user_id, sport_id, session_id, session_date) VALUES (?, ?, ?, ?)",
+      [studentUserId, session.sport_id, sessionId, session.session_date]
+    );
+
+    // 5. Fetch sport name for confirmation
+    const [sportRows] = await pool.query("SELECT name FROM sports WHERE id = ?", [session.sport_id]);
+    const sportName = sportRows[0]?.name || "Sport";
+
+    return res.json({
+      ok: true,
+      message: `Attendance marked for ${sportName}`,
+      sport:   sportName,
+      date:    session.session_date,
+      location: session.location,
+    });
+  } catch (err) {
+    console.error("MARK ATTENDANCE ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 module.exports = { studentRouter: router };
+

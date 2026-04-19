@@ -147,6 +147,7 @@ export default function AdminDisciplinePerformance() {
         title="Discipline"
         subtitle="Sport → Record discipline scores for each student"
         showBack
+                backRoute="/adminHome"
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>

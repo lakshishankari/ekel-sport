@@ -97,7 +97,7 @@ export default function AdminCreateSession() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        <AppHeader title="Create Session" subtitle="New attendance session" showBack />
+        <AppHeader title="Create Session" subtitle="New attendance session" showBack backRoute="/adminHome" />
 
         {/* ── Sport selector ── */}
         <View style={{

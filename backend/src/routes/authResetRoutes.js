@@ -38,13 +38,14 @@ router.post("/forgot-password", async (req, res) => {
       [user.id, otpHash, expiresStr]
     );
 
-    await sendEmail(
+    // Fire-and-forget — respond immediately, email sends in background
+    sendEmail(
       email,
       "EKEL Sport - Password Reset OTP",
       `Your OTP is: ${otp}\nThis OTP expires in ${OTP_EXP_MINUTES} minutes.`,
       otp,
       "RESET_PASSWORD"
-    );
+    ).catch((err) => console.error("[forgot-password] email error:", err));
 
     return res.json({ message: "OTP sent" });
   } catch (e) {
@@ -176,13 +177,14 @@ router.post("/resend-otp", async (req, res) => {
       [user.id, otpHash, expiresStr]
     );
 
-    await sendEmail(
+    // Fire-and-forget — respond immediately, email sends in background
+    sendEmail(
       email,
       "EKEL Sport - Password Reset OTP",
       `Your OTP is: ${otp}\nThis OTP expires in ${OTP_EXP_MINUTES} minutes.`,
       otp,
       "RESET_PASSWORD"
-    );
+    ).catch((err) => console.error("[resend-otp] email error:", err));
 
     return res.json({ message: "OTP resent" });
   } catch (e) {

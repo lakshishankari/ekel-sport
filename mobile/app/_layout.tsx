@@ -52,7 +52,7 @@ export default function RootLayout() {
       <Stack.Screen name="studentProfile" />
       <Stack.Screen name="studentAttendance" />
       <Stack.Screen name="studentPerformance" />
-
+      <Stack.Screen name="studentCreatePost" />
 
       {/* Admin */}
       <Stack.Screen name="adminUsers" />
@@ -69,17 +69,20 @@ export default function RootLayout() {
       <Stack.Screen name="adminMarkAttendance" />
       <Stack.Screen name="adminAttendanceList" />
       <Stack.Screen name="adminAnnouncements" />
+      <Stack.Screen name="adminCreatePost" />
       <Stack.Screen name="adminProfile" />
       <Stack.Screen name="adminPlayerStats" />
 
       {/* Advisory */}
       <Stack.Screen name="createAdvisory" />
       <Stack.Screen name="advisoryEligibility" />
+      <Stack.Screen name="advisoryDashboard" />
 
       {/* Shared */}
       <Stack.Screen name="guestPortal" />
       <Stack.Screen name="reports" />
       <Stack.Screen name="help" />
+      <Stack.Screen name="viewProfile" />
 
       {/* Keep modal if exists */}
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />

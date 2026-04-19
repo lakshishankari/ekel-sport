@@ -18,10 +18,11 @@ export default function AppHeader({ title, subtitle, showBack = true, backRoute,
   const { theme } = useAppTheme();
 
   const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else if (backRoute) {
+    if (backRoute) {
+      // Explicit target declared — always use it (prevents traversing stale stack history)
       router.replace(backRoute as any);
+    } else if (router.canGoBack()) {
+      router.back();
     }
   };
 

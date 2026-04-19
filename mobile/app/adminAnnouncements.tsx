@@ -73,6 +73,7 @@ export default function AdminAnnouncements() {
           title="Announcements"
           subtitle="Send targeted messages to students"
           showBack
+                    backRoute="/adminHome"
           rightSlot={
             <Pressable
               style={{ padding: 8, backgroundColor: theme.accent + "18", borderRadius: 10, borderWidth: 1, borderColor: theme.accent + "33" }}

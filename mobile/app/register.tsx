@@ -51,12 +51,32 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
       await apiPost<{ message: string }>("/api/auth-otp/send-registration-otp", { studentId: sid, fullName: name, email: em, password: pw });
-      Alert.alert("OTP Sent! 📧", "We've sent a verification code to your email.", [{
-        text: "OK",
-        onPress: () => router.push({ pathname: "/verifyRegistrationOtp", params: { email: em, studentId: sid, fullName: name, password: pw } }),
-      }]);
+      // Success — navigate directly without an intermediate alert
+      router.push({ pathname: "/verifyRegistrationOtp", params: { email: em, studentId: sid, fullName: name, password: pw } });
     } catch (e: any) {
-      Alert.alert("Failed to send OTP", e?.message || "Try again.");
+      const msg: string = e?.message || "";
+
+      // Rate-limited: an OTP was already sent recently — redirect to enter it
+      if (msg.toLowerCase().includes("please wait") || msg.toLowerCase().includes("wait before")) {
+        Alert.alert(
+          "OTP Already Sent 📧",
+          "A verification code was already sent to your email. Please check your inbox and enter the code.",
+          [{ text: "Enter OTP", onPress: () => router.push({ pathname: "/verifyRegistrationOtp", params: { email: em, studentId: sid, fullName: name, password: pw } }) }]
+        );
+        return;
+      }
+
+      // Timeout: OTP was likely saved to DB but response was slow
+      if (msg.toLowerCase().includes("timed out") || msg.toLowerCase().includes("request timed out")) {
+        Alert.alert(
+          "Check your email 📧",
+          "The server took a while to respond, but your OTP may have been sent. Please check your email and enter the code.",
+          [{ text: "Enter OTP", onPress: () => router.push({ pathname: "/verifyRegistrationOtp", params: { email: em, studentId: sid, fullName: name, password: pw } }) }]
+        );
+        return;
+      }
+
+      Alert.alert("Failed to send OTP", msg || "Please try again.");
     } finally {
       setLoading(false);
     }

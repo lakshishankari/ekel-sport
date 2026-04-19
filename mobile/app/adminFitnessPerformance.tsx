@@ -147,6 +147,7 @@ export default function AdminFitnessPerformance() {
         title="Fitness Tests"
         subtitle="Sport → Record fitness scores for each student"
         showBack
+                backRoute="/adminHome"
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>

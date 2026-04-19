@@ -228,6 +228,7 @@ export default function AdminMatchPerformance() {
         title="Match Performance"
         subtitle="Select sport → event → enter player marks"
         showBack
+                backRoute="/adminHome"
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>

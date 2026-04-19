@@ -277,6 +277,7 @@ export default function AdminSquadPool() {
         title="Squad & Pool"
         subtitle="Manage levels, teams and event rosters"
         showBack
+                backRoute="/adminHome"
       />
 
       {/* ── Sport chips ── */}

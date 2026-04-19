@@ -90,7 +90,7 @@ export default function StudentSports() {
   if (loading) {
     return (
       <StudentScreen activeRoute="/studentSports">
-        <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" />
+        <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" backRoute="/studentHome" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={theme.accent} />
           <Text style={{ color: theme.textSub, marginTop: 12, fontSize: 14 }}>Loading sports...</Text>
@@ -102,7 +102,7 @@ export default function StudentSports() {
   if (error) {
     return (
       <StudentScreen activeRoute="/studentSports">
-        <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" />
+        <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" backRoute="/studentHome" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
           <Ionicons name="wifi-outline" size={56} color="#EF4444" />
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 16, textAlign: "center" }}>
@@ -124,7 +124,20 @@ export default function StudentSports() {
 
   return (
     <StudentScreen activeRoute="/studentSports">
-      <AppHeader title="Sports & Enrollment" subtitle="Browse sports and request to join" />
+      <AppHeader title="Sports & Enrollment" subtitle={`${sports.length} sport${sports.length !== 1 ? "s" : ""} available`} backRoute="/studentHome" />
+
+      {/* My Sports quick-link */}
+      <TouchableOpacity
+        onPress={() => router.push("/mySports" as any)}
+        activeOpacity={0.8}
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 14, backgroundColor: theme.accent + "18", borderWidth: 1, borderColor: theme.accent + "44" }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Ionicons name="medal" size={18} color={theme.accent} />
+          <Text style={{ color: theme.accent, fontWeight: "800", fontSize: 14 }}>My Approved Sports</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={theme.accent} />
+      </TouchableOpacity>
 
       <FlatList
         data={sports}

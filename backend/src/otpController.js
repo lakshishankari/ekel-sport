@@ -64,12 +64,12 @@ async function sendOtp(req, res) {
       [email, purpose, otp_hash, expires_at]
     );
 
-    // send email
-    await sendEmail(
+    // Fire-and-forget — respond immediately, email sends in background
+    sendEmail(
       email,
       "Your EKEL-Sport OTP Code",
       `Your OTP is: ${otp}\n\nPurpose: ${purpose}\nThis code expires in 10 minutes.`
-    );
+    ).catch((err) => console.error("sendOtp background email error:", err));
 
     return res.json({ message: "OTP sent" });
   } catch (err) {

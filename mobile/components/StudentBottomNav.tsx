@@ -5,39 +5,39 @@ import { router } from "expo-router";
 import { useAppTheme } from "../lib/themeStore";
 
 // ── Tab definitions ──────────────────────────────────────────────
-// Home, My Sports, Post(center FAB), Performance, Attendance
+// Home | Sports(enroll) | Post(FAB) | Performance | Attendance
 const TABS = [
   {
-    icon:       "home-outline"       as const,
-    activeIcon: "home"               as const,
+    icon:       "home-outline"         as const,
+    activeIcon: "home"                 as const,
     route:      "/studentHome",
     label:      "Home",
     isCreate:   false,
   },
   {
-    icon:       "medal-outline"      as const,
-    activeIcon: "medal"              as const,
-    route:      "/mySports",
-    label:      "My Sports",
+    icon:       "basketball-outline"   as const,
+    activeIcon: "basketball"           as const,
+    route:      "/studentSports",
+    label:      "Sports",
     isCreate:   false,
   },
   {
-    icon:       "add-circle"         as const,
-    activeIcon: "add-circle"         as const,
+    icon:       "add-circle"           as const,
+    activeIcon: "add-circle"           as const,
     route:      "/studentCreatePost",
     label:      "Post",
     isCreate:   true,
   },
   {
-    icon:       "trophy-outline"     as const,
-    activeIcon: "trophy"             as const,
+    icon:       "trophy-outline"       as const,
+    activeIcon: "trophy"               as const,
     route:      "/studentPerformance",
     label:      "Performance",
     isCreate:   false,
   },
   {
-    icon:       "calendar-outline"   as const,
-    activeIcon: "calendar"           as const,
+    icon:       "calendar-outline"     as const,
+    activeIcon: "calendar"             as const,
     route:      "/studentAttendance",
     label:      "Attendance",
     isCreate:   false,
@@ -52,18 +52,17 @@ export default function StudentBottomNav({ activeRoute }: Props) {
   return (
     <View
       style={{
-        flexDirection:    "row",
-        backgroundColor:  theme.bgCard,
-        borderTopWidth:   1,
-        borderTopColor:   theme.border,
-        paddingTop:       8,
-        paddingBottom:    Platform.OS === "ios" ? 24 : 10,
-        // Subtle elevation / shadow for a premium feel
-        shadowColor:      "#000",
-        shadowOpacity:    0.08,
-        shadowRadius:     8,
-        shadowOffset:     { width: 0, height: -3 },
-        elevation:        8,
+        flexDirection:   "row",
+        backgroundColor: theme.bgCard,
+        borderTopWidth:  1,
+        borderTopColor:  theme.border,
+        paddingTop:      8,
+        paddingBottom:   Platform.OS === "ios" ? 24 : 10,
+        shadowColor:     "#000",
+        shadowOpacity:   0.08,
+        shadowRadius:    8,
+        shadowOffset:    { width: 0, height: -3 },
+        elevation:       8,
       }}
     >
       {TABS.map((tab) => {
@@ -80,18 +79,18 @@ export default function StudentBottomNav({ activeRoute }: Props) {
             >
               <View
                 style={{
-                  width:            52,
-                  height:           52,
-                  borderRadius:     26,
-                  backgroundColor:  theme.accent,
-                  alignItems:       "center",
-                  justifyContent:   "center",
-                  marginTop:        -26,
-                  shadowColor:      theme.accent,
-                  shadowOffset:     { width: 0, height: 4 },
-                  shadowOpacity:    0.45,
-                  shadowRadius:     10,
-                  elevation:        10,
+                  width:           52,
+                  height:          52,
+                  borderRadius:    26,
+                  backgroundColor: theme.accent,
+                  alignItems:      "center",
+                  justifyContent:  "center",
+                  marginTop:       -26,
+                  shadowColor:     theme.accent,
+                  shadowOffset:    { width: 0, height: 4 },
+                  shadowOpacity:   0.45,
+                  shadowRadius:    10,
+                  elevation:       10,
                 }}
               >
                 <Ionicons name="add" size={28} color="#fff" />
@@ -116,15 +115,15 @@ export default function StudentBottomNav({ activeRoute }: Props) {
             key={tab.route}
             onPress={() => router.replace(tab.route as any)}
             style={{
-              flex:           1,
-              alignItems:     "center",
-              justifyContent: "center",
+              flex:            1,
+              alignItems:      "center",
+              justifyContent:  "center",
               paddingVertical: 2,
-              position:       "relative",
+              position:        "relative",
             }}
             activeOpacity={0.7}
           >
-            {/* Active indicator pill at the very top of the nav bar */}
+            {/* Active indicator pill */}
             {isActive && (
               <View
                 style={{
@@ -138,7 +137,7 @@ export default function StudentBottomNav({ activeRoute }: Props) {
               />
             )}
 
-            {/* Icon with a subtle active background */}
+            {/* Icon with tinted background when active */}
             <View
               style={{
                 width:           36,

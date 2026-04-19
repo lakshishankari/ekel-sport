@@ -292,6 +292,7 @@ export default function AdminEvents() {
         title="Events"
         subtitle="Tournaments, training camps & matches"
         showBack
+                  backRoute="/adminHome"
         rightSlot={
           <Pressable
             style={S.headerBtn}

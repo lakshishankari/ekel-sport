@@ -131,6 +131,7 @@ export default function AdminAttendanceList() {
         title="Attendance Sessions"
         subtitle="All training sessions & attendance records"
         showBack
+                  backRoute="/adminHome"
         rightSlot={
           <Pressable
             style={{

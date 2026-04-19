@@ -72,20 +72,40 @@ router.post("/send-registration-otp", async (req, res) => {
             return res.status(409).json({ message: "Student ID already registered" });
         }
 
-        // Check rate limiting (prevent OTP spam)
+        // ── Smart OTP reuse logic ─────────────────────────────────────────
+        // 1. If a valid (unused, non-expired) OTP already exists → return OK.
+        //    The code is already in the user's inbox; let them proceed.
+        const [validOtp] = await pool.query(
+            `SELECT id FROM otp_codes
+             WHERE email=? AND purpose='REGISTER'
+               AND used_at IS NULL AND expires_at > NOW()
+             ORDER BY id DESC LIMIT 1`,
+            [cleanEmail]
+        );
+
+        if (validOtp.length > 0) {
+            // OTP is still valid — no need to send another one
+            return res.json({ message: "OTP already sent — please check your email" });
+        }
+
+        // 2. No valid OTP exists. Enforce a 30s spam-prevention cooldown.
         const [recent] = await pool.query(
-            `SELECT id, created_at FROM otp_codes
-       WHERE email=? AND purpose='REGISTER'
-       ORDER BY id DESC LIMIT 1`,
+            `SELECT created_at FROM otp_codes
+             WHERE email=? AND purpose='REGISTER'
+             ORDER BY id DESC LIMIT 1`,
             [cleanEmail]
         );
 
         if (recent.length) {
-            const last = new Date(recent[0].created_at).getTime();
-            if (Date.now() - last < 60 * 1000) {
-                return res.status(429).json({ message: "Please wait before requesting another OTP" });
+            const elapsed = Date.now() - new Date(recent[0].created_at).getTime();
+            if (elapsed < 30 * 1000) {
+                const wait = Math.ceil((30000 - elapsed) / 1000);
+                return res.status(429).json({
+                    message: `Please wait ${wait} second${wait !== 1 ? "s" : ""} before requesting another OTP`,
+                });
             }
         }
+        // ─────────────────────────────────────────────────────────────────
 
         // Generate and store OTP
         const otp = generateOtp();
@@ -104,14 +124,17 @@ router.post("/send-registration-otp", async (req, res) => {
             [cleanEmail, "REGISTER", otp_hash, expires_at]
         );
 
-        // Send email (HTML)
-        await sendEmail(
+        // Send email in the background — do NOT await so the response is
+        // returned immediately after the OTP is saved. SMTP can be slow.
+        sendEmail(
             cleanEmail,
             "EKEL Sport - Email Verification OTP",
             `Welcome to EKEL Sport! Your OTP is: ${otp}. Expires in 10 minutes.`,
             otp,
             "REGISTER"
-        );
+        ).catch((emailErr) => {
+            console.error("Background sendEmail error:", emailErr);
+        });
 
         return res.json({ message: "OTP sent to your email" });
     } catch (err) {

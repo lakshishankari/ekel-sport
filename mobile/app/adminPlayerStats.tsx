@@ -62,6 +62,7 @@ export default function AdminPlayerStats() {
         title="Player Stats"
         subtitle="Select a category to record student scores"
         showBack
+                backRoute="/adminHome"
       />
 
       <ScrollView

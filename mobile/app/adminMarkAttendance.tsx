@@ -153,6 +153,7 @@ export default function AdminMarkAttendance() {
         title="Mark Attendance"
         subtitle={`${sport} · ${formatDate(sessionDate)}`}
         showBack
+                backRoute="/adminHome"
       />
 
       <ScrollView

@@ -26,7 +26,7 @@ export default function AdminAddMarks() {
 
   return (
     <Screen>
-      <AppHeader title="Performance Module" subtitle="Match, fitness and discipline entries. Attendance is auto from QR." showBack />
+      <AppHeader title="Performance Module" subtitle="Match, fitness and discipline entries. Attendance is auto from QR." showBack backRoute="/adminHome" />
 
       {/* Auto attendance info card */}
       <AppCard style={{ marginBottom: 14 }}>
